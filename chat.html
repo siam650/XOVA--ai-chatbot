@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#101114" />
+    <meta
+      name="description"
+      content="Practice English in a relaxed conversation with Xova."
+    />
+    <title>Casual Chat — Xova</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/chat.css" />
+    <script src="js/chat.js" defer></script>
+  </head>
+  <body>
+    <div class="chat-app" id="chat-app">
+      <button
+        class="sidebar-backdrop"
+        id="sidebar-backdrop"
+        type="button"
+        aria-label="Close navigation menu"
+        hidden
+      ></button>
+
+      <aside class="sidebar" id="sidebar" aria-label="Conversation navigation">
+        <div class="sidebar-top">
+          <div class="brand-row">
+            <a class="brand" href="index.html" aria-label="Xova home">
+              <img class="brand-logo" src="images/logo.jpg" alt="Xova" width="1041" height="522" />
+            </a>
+            <a class="home-link" href="index.html">Home</a>
+          </div>
+
+          <button class="new-chat-button" id="sidebar-new-chat" type="button">
+            <span aria-hidden="true">＋</span>
+            New conversation
+          </button>
+
+          <section class="history-section" aria-labelledby="history-title">
+            <div class="section-label-row">
+              <h2 class="sidebar-label" id="history-title">Recent conversations</h2>
+              <span class="preview-badge">Preview</span>
+            </div>
+            <p class="history-placeholder">
+              Your conversations will appear here. History isn’t saved in this demo.
+            </p>
+          </section>
+
+          <nav class="mode-section" aria-labelledby="modes-title">
+            <h2 class="sidebar-label" id="modes-title">Practice modes</h2>
+            <button class="mode-button is-active" type="button" data-mode="Casual Chat" data-mode-key="casual-chat" aria-pressed="true">
+              <span class="mode-icon mode-icon-casual" aria-hidden="true">◌</span>
+              <span>Casual Chat</span>
+              <span class="active-dot" aria-hidden="true"></span>
+            </button>
+            <button class="mode-button" type="button" data-mode="Interview Practice" data-mode-key="interview-practice" aria-pressed="false">
+              <span class="mode-icon mode-icon-interview" aria-hidden="true">▤</span>
+              <span>Interview Practice</span>
+            </button>
+            <button class="mode-button" type="button" data-mode="Debate" data-mode-key="debate" aria-pressed="false">
+              <span class="mode-icon mode-icon-debate" aria-hidden="true">◫</span>
+              <span>Debate</span>
+            </button>
+            <button class="mode-button" type="button" data-mode="Storytelling" data-mode-key="storytelling" aria-pressed="false">
+              <span class="mode-icon mode-icon-story" aria-hidden="true">▧</span>
+              <span>Storytelling</span>
+            </button>
+          </nav>
+        </div>
+
+        <div class="sidebar-bottom">
+          <p class="sidebar-tagline">Speak freely.<br />Grow naturally.</p>
+          <button
+            class="settings-button"
+            type="button"
+            disabled
+            aria-label="Settings, coming soon"
+            title="Settings are coming soon"
+          >
+            <span aria-hidden="true">⚙</span>
+            Settings
+            <span class="coming-soon-label">Coming soon</span>
+          </button>
+        </div>
+      </aside>
+
+      <main class="chat-main">
+        <header class="chat-header">
+          <div class="header-title-group">
+            <button
+              class="sidebar-toggle"
+              id="sidebar-toggle"
+              type="button"
+              aria-label="Open conversation menu"
+              aria-expanded="false"
+              aria-controls="sidebar"
+            >
+              <span></span><span></span><span></span>
+            </button>
+            <div>
+              <h1 class="current-mode" id="current-mode">Casual Chat</h1>
+              <p class="ready-status"><span aria-hidden="true"></span> Ready to practice</p>
+            </div>
+          </div>
+          <button class="header-new-chat" id="header-new-chat" type="button">
+            <span aria-hidden="true">＋</span>
+            <span>New conversation</span>
+          </button>
+        </header>
+
+        <section class="conversation" aria-label="English conversation">
+          <div class="conversation-scroll" id="conversation-scroll">
+            <div
+              class="message-list"
+              id="message-list"
+              role="log"
+              aria-label="Conversation messages"
+              aria-live="polite"
+              aria-relevant="additions"
+            >
+              <div class="empty-state" id="empty-state">
+                <div class="welcome-mark" aria-hidden="true">✳</div>
+                <p class="welcome-kicker">A little practice goes a long way</p>
+                <h2>A space to practice,<br /><span>at your own pace.</span></h2>
+                <p class="welcome-copy">
+                  Say hello, share a thought, or tell me how your day is going. Mistakes are part
+                  of learning here.
+                </p>
+                <div class="suggestions" aria-label="Conversation starters">
+                  <button class="suggestion" type="button" data-prompt="What do you like to do in your free time?">
+                    What do you like to do in your free time?
+                  </button>
+                  <button class="suggestion" type="button" data-prompt="Tell me about something that made you smile today.">
+                    Something that made you smile today
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="composer-area">
+            <div class="learning-options">
+              <label class="correction-option">
+                <input id="correction-toggle" type="checkbox" checked />
+                <span class="checkbox-visual" aria-hidden="true"></span>
+                <span>Show grammar corrections</span>
+              </label>
+              <span class="demo-note">Example-based demo · not an AI grammar checker</span>
+            </div>
+
+            <form class="composer" id="message-form">
+              <label class="visually-hidden" for="message-input">Your message in English</label>
+              <textarea
+                id="message-input"
+                name="message"
+                rows="1"
+                maxlength="1200"
+                placeholder="Say something in English…"
+                autocomplete="off"
+                required
+              ></textarea>
+              <button
+                class="microphone-button"
+                type="button"
+                disabled
+                aria-label="Voice input, coming soon"
+                title="Voice input is coming soon"
+              >
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <rect x="9" y="3" width="6" height="12" rx="3"></rect>
+                  <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-4 0h8"></path>
+                </svg>
+              </button>
+              <button class="send-button" id="send-button" type="submit" aria-label="Send message" disabled>
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M5 12h14m-6-6 6 6-6 6"></path>
+                </svg>
+              </button>
+            </form>
+            <p class="composer-hint">Enter to send <span aria-hidden="true">·</span> Shift + Enter for a new line</p>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

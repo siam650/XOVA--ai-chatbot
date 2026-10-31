@@ -2,8 +2,6 @@ const menuToggle = document.querySelector(".menu-toggle");
 const navigation = document.querySelector(".primary-navigation");
 const mobileNavigation = window.matchMedia("(max-width: 820px)");
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-const toast = document.querySelector(".toast");
-let toastTimeout;
 
 document.documentElement.classList.add("js");
 
@@ -83,18 +81,6 @@ document.addEventListener("click", (event) => {
 
 mobileNavigation.addEventListener("change", syncNavigation);
 syncNavigation();
-
-document.querySelectorAll(".practice-card").forEach((card) => {
-  card.addEventListener("click", () => {
-    const mode = card.dataset.mode;
-    toast.textContent = `${mode} is coming soon. For now, explore the ways Xova helps you grow.`;
-    toast.classList.add("is-visible");
-    window.clearTimeout(toastTimeout);
-    toastTimeout = window.setTimeout(() => {
-      toast.classList.remove("is-visible");
-    }, 3200);
-  });
-});
 
 document.querySelector("#current-year").textContent = new Date().getFullYear();
 const revealElements = document.querySelectorAll(".reveal");

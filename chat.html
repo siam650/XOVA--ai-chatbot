@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#101114" />
+    <meta name="theme-color" content="#171719" />
     <meta
       name="description"
       content="Practice English in a relaxed conversation with Xova."
@@ -15,7 +15,11 @@
       href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
+    <link rel="stylesheet" href="css/theme.css" />
     <link rel="stylesheet" href="css/chat.css" />
+    <script src="js/chat-storage.js" defer></script>
+    <script src="js/chat-ai.js" defer></script>
+    <script src="js/chat-voice.js" defer></script>
     <script src="js/chat.js" defer></script>
   </head>
   <body>
@@ -34,59 +38,26 @@
             <a class="brand" href="index.html" aria-label="Xova home">
               <img class="brand-logo" src="images/logo.jpg" alt="Xova" width="1041" height="522" />
             </a>
-            <a class="home-link" href="index.html">Home</a>
           </div>
 
           <button class="new-chat-button" id="sidebar-new-chat" type="button">
             <span aria-hidden="true">＋</span>
             New conversation
           </button>
+          <a class="home-button" href="index.html"><span aria-hidden="true">⌂</span> Home</a>
 
           <section class="history-section" aria-labelledby="history-title">
             <div class="section-label-row">
-              <h2 class="sidebar-label" id="history-title">Recent conversations</h2>
-              <span class="preview-badge">Preview</span>
+              <h2 class="sidebar-label" id="history-title">Conversation history</h2>
             </div>
-            <p class="history-placeholder">
-              Your conversations will appear here. History isn’t saved in this demo.
-            </p>
+            <div class="history-list" id="history-list" aria-label="Saved conversations"></div>
+            <p class="history-placeholder" id="history-empty">Your saved conversations will appear here.</p>
           </section>
-
-          <nav class="mode-section" aria-labelledby="modes-title">
-            <h2 class="sidebar-label" id="modes-title">Practice modes</h2>
-            <button class="mode-button is-active" type="button" data-mode="Casual Chat" data-mode-key="casual-chat" aria-pressed="true">
-              <span class="mode-icon mode-icon-casual" aria-hidden="true">◌</span>
-              <span>Casual Chat</span>
-              <span class="active-dot" aria-hidden="true"></span>
-            </button>
-            <button class="mode-button" type="button" data-mode="Interview Practice" data-mode-key="interview-practice" aria-pressed="false">
-              <span class="mode-icon mode-icon-interview" aria-hidden="true">▤</span>
-              <span>Interview Practice</span>
-            </button>
-            <button class="mode-button" type="button" data-mode="Debate" data-mode-key="debate" aria-pressed="false">
-              <span class="mode-icon mode-icon-debate" aria-hidden="true">◫</span>
-              <span>Debate</span>
-            </button>
-            <button class="mode-button" type="button" data-mode="Storytelling" data-mode-key="storytelling" aria-pressed="false">
-              <span class="mode-icon mode-icon-story" aria-hidden="true">▧</span>
-              <span>Storytelling</span>
-            </button>
-          </nav>
         </div>
 
         <div class="sidebar-bottom">
           <p class="sidebar-tagline">Speak freely.<br />Grow naturally.</p>
-          <button
-            class="settings-button"
-            type="button"
-            disabled
-            aria-label="Settings, coming soon"
-            title="Settings are coming soon"
-          >
-            <span aria-hidden="true">⚙</span>
-            Settings
-            <span class="coming-soon-label">Coming soon</span>
-          </button>
+          <p class="voice-placeholder">History is saved in this browser</p>
         </div>
       </aside>
 
@@ -108,10 +79,20 @@
               <p class="ready-status"><span aria-hidden="true"></span> Ready to practice</p>
             </div>
           </div>
-          <button class="header-new-chat" id="header-new-chat" type="button">
-            <span aria-hidden="true">＋</span>
-            <span>New conversation</span>
-          </button>
+          <div class="header-actions">
+            <button class="header-new-chat" id="header-new-chat" type="button">
+              <span aria-hidden="true">＋</span>
+              <span>New conversation</span>
+            </button>
+            <button class="end-chat-button" id="end-chat-button" type="button" disabled>
+              <span class="end-chat-full-label">End conversation</span>
+              <span class="end-chat-short-label" aria-hidden="true">End</span>
+            </button>
+            <button class="view-report-button" id="view-report-button" type="button" hidden>
+              <span class="report-full-label">View learning report</span>
+              <span class="report-short-label" aria-hidden="true">Report</span>
+            </button>
+          </div>
         </header>
 
         <section class="conversation" aria-label="English conversation">
@@ -122,7 +103,7 @@
               role="log"
               aria-label="Conversation messages"
               aria-live="polite"
-              aria-relevant="additions"
+              aria-relevant="additions text"
             >
               <div class="empty-state" id="empty-state">
                 <div class="welcome-mark" aria-hidden="true">✳</div>
@@ -145,15 +126,35 @@
           </div>
 
           <div class="composer-area">
-            <div class="learning-options">
-              <label class="correction-option">
-                <input id="correction-toggle" type="checkbox" checked />
-                <span class="checkbox-visual" aria-hidden="true"></span>
-                <span>Show grammar corrections</span>
-              </label>
-              <span class="demo-note">Example-based demo · not an AI grammar checker</span>
-            </div>
-
+            <section class="voice-panel" id="voice-panel" aria-label="Voice conversation controls">
+              <button
+                class="voice-button"
+                id="voice-button"
+                type="button"
+                aria-label="Start speaking"
+                aria-pressed="false"
+              >
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <rect x="9" y="3" width="6" height="12" rx="3"></rect>
+                  <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-4 0h8"></path>
+                </svg>
+                <span id="voice-button-label">Speak</span>
+              </button>
+              <div class="voice-state-copy">
+                <span class="voice-state-indicator" id="voice-state-indicator" aria-hidden="true"></span>
+                <p id="voice-status" role="status" aria-live="polite">Voice ready · tap to speak</p>
+                <p class="live-transcript" id="live-transcript" aria-live="polite"></p>
+              </div>
+              <div class="voice-secondary-controls">
+                <button class="voice-utility-button" id="mute-voice-button" type="button" aria-pressed="false">
+                  Mute voice
+                </button>
+                <button class="voice-utility-button" id="stop-speaking-button" type="button" disabled>
+                  Stop speaking
+                </button>
+              </div>
+            </section>
+            <p class="demo-note">Push to talk · speech depends on browser support · Xova replies are mock</p>
             <form class="composer" id="message-form">
               <label class="visually-hidden" for="message-input">Your message in English</label>
               <textarea
@@ -165,28 +166,27 @@
                 autocomplete="off"
                 required
               ></textarea>
-              <button
-                class="microphone-button"
-                type="button"
-                disabled
-                aria-label="Voice input, coming soon"
-                title="Voice input is coming soon"
-              >
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <rect x="9" y="3" width="6" height="12" rx="3"></rect>
-                  <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-4 0h8"></path>
-                </svg>
-              </button>
               <button class="send-button" id="send-button" type="submit" aria-label="Send message" disabled>
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M5 12h14m-6-6 6 6-6 6"></path>
                 </svg>
               </button>
             </form>
-            <p class="composer-hint">Enter to send <span aria-hidden="true">·</span> Shift + Enter for a new line</p>
+            <p class="composer-hint">Speak, or type instead · Enter to send <span aria-hidden="true">·</span> Shift + Enter for a new line</p>
           </div>
         </section>
       </main>
     </div>
+    <dialog class="report-dialog" id="report-dialog" aria-labelledby="report-title">
+      <div class="report-header">
+        <div>
+          <p class="report-kicker">Your practice, reflected</p>
+          <h2 id="report-title">Learning report</h2>
+        </div>
+        <button class="report-close" id="report-close" type="button" aria-label="Close learning report">×</button>
+      </div>
+      <div class="report-content" id="report-content"></div>
+    </dialog>
+    <p class="storage-notice" id="storage-notice" role="status" aria-live="polite" hidden></p>
   </body>
 </html>

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Build confidence in English, one conversation at a time. Practice naturally with Xova."
+    />
+    <meta name="theme-color" content="#101114" />
+    <title>Xova — Speak freely. Grow naturally.</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/style.css" />
+    <script src="js/script.js" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="nav-shell">
+        <a class="brand" href="#home" aria-label="Xova home">
+          <img class="brand-logo" src="images/logo.jpg" alt="Xova" width="1041" height="522" />
+        </a>
+
+        <button
+          class="menu-toggle"
+          type="button"
+          aria-label="Open navigation menu"
+          aria-expanded="false"
+          aria-controls="primary-navigation"
+        >
+          <span></span>
+          <span></span>
+        </button>
+
+        <nav class="primary-navigation" id="primary-navigation" aria-label="Main navigation">
+          <a class="nav-link nav-link-active" href="#home">Home</a>
+          <a class="nav-link" href="#how-it-works">About</a>
+          <div class="nav-auth" role="group" aria-label="Account options">
+            <button
+              class="auth-button auth-signin"
+              type="button"
+              disabled
+              aria-label="Sign in, coming soon"
+              title="Sign in is coming soon"
+            >
+              Sign in <span class="auth-status">Coming soon</span>
+            </button>
+            <button
+              class="auth-button auth-register"
+              type="button"
+              disabled
+              aria-label="Register, coming soon"
+              title="Registration is coming soon"
+            >
+              Register <span class="auth-status">Coming soon</span>
+            </button>
+          </div>
+          <a class="nav-cta" href="#practice">Find your flow <span aria-hidden="true">↗</span></a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero section-shell" id="home" aria-labelledby="hero-title">
+        <div class="hero-glow hero-glow-one" aria-hidden="true"></div>
+        <div class="hero-glow hero-glow-two" aria-hidden="true"></div>
+        <div class="hero-content reveal">
+          <div class="eyebrow"><span class="eyebrow-dot"></span>Your personal English partner</div>
+          <h1 id="hero-title">Speak freely.<br /><span class="gradient-text">Grow naturally.</span></h1>
+          <p class="hero-description">
+            Build confidence in English, one conversation at a time. Practice naturally, express
+            yourself freely, and improve without the fear of making mistakes.
+          </p>
+          <a class="button button-primary hero-button" href="#practice">
+            Start speaking <span class="button-arrow" aria-hidden="true">→</span>
+          </a>
+          <p class="hero-reassurance"><span aria-hidden="true">✳</span> No pressure. No judgment. Just practice.</p>
+        </div>
+        <div class="hero-orbit orbit-outer" aria-hidden="true"></div>
+        <div class="hero-orbit orbit-inner" aria-hidden="true"></div>
+        <span class="hero-spark spark-one" aria-hidden="true">✳</span>
+        <span class="hero-spark spark-two" aria-hidden="true">✦</span>
+        <div class="hero-caption" aria-hidden="true"><span></span> A little practice goes a long way</div>
+      </section>
+
+      <section class="practice-section section-shell" id="practice" aria-labelledby="practice-title">
+        <div class="section-heading reveal">
+          <span class="section-kicker">Make it yours</span>
+          <h2 id="practice-title">How would you like to <span>practice today?</span></h2>
+          <p>Choose a conversation style and start expressing yourself.</p>
+        </div>
+
+        <div class="practice-grid">
+          <button class="practice-card reveal" type="button" data-mode="Casual Chat">
+            <span class="card-icon icon-lavender" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M8 3h8v2a4 4 0 0 1-8 0V3Z"/><path d="M8 5H5v1a4 4 0 0 0 4 4M16 5h3v1a4 4 0 0 1-4 4M12 9v5m-4 5h8m-7-5h6v5H9v-5Z"/></svg>
+            </span>
+            <span class="card-copy">
+              <span class="card-title">Casual Chat</span>
+              <span class="card-description">Talk about everyday life, hobbies, interests, and anything on your mind.</span>
+            </span>
+            <span class="card-arrow" aria-hidden="true">↗</span>
+          </button>
+
+          <button class="practice-card reveal" type="button" data-mode="Interview Practice">
+            <span class="card-icon icon-peach" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m-13 5h18m-11 0v2h4v-2"/></svg>
+            </span>
+            <span class="card-copy">
+              <span class="card-title">Interview Practice</span>
+              <span class="card-description">Prepare for interviews and learn to communicate professionally.</span>
+            </span>
+            <span class="card-arrow" aria-hidden="true">↗</span>
+          </button>
+
+          <button class="practice-card reveal" type="button" data-mode="Debate & Discussion">
+            <span class="card-icon icon-mint" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M21 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-9.5A7.5 7.5 0 0 1 10.5 4H13"/><path d="M15 3h6v6m-6 0 6-6m-13 9h6m-6 3h4"/></svg>
+            </span>
+            <span class="card-copy">
+              <span class="card-title">Debate &amp; Discussion</span>
+              <span class="card-description">Express opinions, defend your ideas, and grow your conversational confidence.</span>
+            </span>
+            <span class="card-arrow" aria-hidden="true">↗</span>
+          </button>
+
+          <button class="practice-card reveal" type="button" data-mode="Storytelling">
+            <span class="card-icon icon-blue" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 7v14m0-14c-1.6-1.3-3.5-2-5.5-2H3v14h3.5c2 0 3.9.7 5.5 2m0-14c1.6-1.3 3.5-2 5.5-2H21v14h-3.5c-2 0-3.9.7-5.5 2"/></svg>
+            </span>
+            <span class="card-copy">
+              <span class="card-title">Storytelling</span>
+              <span class="card-description">Practice describing experiences, telling stories, and expressing thoughts clearly.</span>
+            </span>
+            <span class="card-arrow" aria-hidden="true">↗</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="journey-section section-shell" id="how-it-works" aria-labelledby="journey-title">
+        <div class="section-heading reveal">
+          <span class="section-kicker">A simple way forward</span>
+          <h2 id="journey-title">Your journey to better English <span>starts here.</span></h2>
+        </div>
+
+        <div class="steps-grid">
+          <article class="step-card reveal">
+            <div class="step-topline"><span class="step-number">01</span><span class="step-icon" aria-hidden="true">✳</span></div>
+            <h3>Speak Naturally</h3>
+            <p>Talk about things that interest you in a relaxed environment.</p>
+          </article>
+          <article class="step-card reveal">
+            <div class="step-topline"><span class="step-number">02</span><span class="step-icon step-icon-spark" aria-hidden="true">✧</span></div>
+            <h3>Get Helpful Feedback</h3>
+            <p>Discover grammar mistakes and learn more natural expressions.</p>
+          </article>
+          <article class="step-card reveal">
+            <div class="step-topline"><span class="step-number">03</span><span class="step-icon step-icon-star" aria-hidden="true">✦</span></div>
+            <h3>Grow Your Confidence</h3>
+            <p>Practice consistently and become more comfortable speaking English.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="closing-section section-shell reveal" aria-labelledby="closing-title">
+        <div class="closing-glow" aria-hidden="true"></div>
+        <span class="section-kicker">Your voice belongs here</span>
+        <h2 id="closing-title">Your next conversation<br />starts <span class="gradient-text">here.</span></h2>
+        <p>Don’t wait until your English is perfect. Start practicing today.</p>
+        <a class="button button-primary closing-button" href="#practice">
+          Let’s talk <span class="button-arrow" aria-hidden="true">→</span>
+        </a>
+      </section>
+    </main>
+
+    <footer class="site-footer section-shell">
+      <a class="brand footer-brand" href="#home" aria-label="Xova home">
+        <img class="brand-logo" src="images/logo.jpg" alt="Xova" width="1041" height="522" />
+      </a>
+      <p class="footer-tagline">Speak freely. Grow naturally.</p>
+      <a class="footer-about" href="#how-it-works">About Xova <span aria-hidden="true">↗</span></a>
+      <p class="copyright">© <span id="current-year"></span> Xova. Made for every voice.</p>
+    </footer>
+
+    <div class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+  </body>
+</html>

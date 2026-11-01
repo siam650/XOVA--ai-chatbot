@@ -1,0 +1,358 @@
+/*
+ * Xova — Cinematic Introduction & Particle System Styles
+ * Covers: intro overlay, XOVA brand text, skip button, transitions, hero split layout
+ *
+ * Load order: after theme.css, before style.css
+ */
+
+/* ================================================================
+   INTRO OVERLAY
+   Full-screen overlay that sits above everything during the
+   cinematic introduction sequence.
+   ================================================================ */
+
+#xova-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #060b18;
+  /* Transition used when the overlay fades out into the homepage */
+  transition: opacity 1200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#xova-intro.is-fading-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#xova-intro.is-hidden {
+  display: none;
+}
+
+/* WebGL canvas fills the entire overlay */
+#xova-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ================================================================
+   XOVA BRAND TEXT (Stage 1)
+   The cinematic "XOVA" letters shown before the particle transition.
+   ================================================================ */
+
+#xova-brand-text {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+  user-select: none;
+}
+
+.xova-letters {
+  display: flex;
+  gap: 0.04em;
+  font-family: "Manrope", sans-serif;
+  font-size: clamp(72px, 14vw, 160px);
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  text-transform: uppercase;
+  /* Start invisible; JS drives the animation */
+  opacity: 0;
+}
+
+.xova-letter {
+  display: inline-block;
+  background: linear-gradient(
+    160deg,
+    #ffffff 0%,
+    #c8e4ff 35%,
+    #9ac8ff 60%,
+    #72deef 85%,
+    #9a87ff 100%
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  /* Per-letter glow via text-shadow on a wrapper pseudo element */
+  filter: drop-shadow(0 0 28px rgba(114, 222, 239, 0.45))
+          drop-shadow(0 0 60px rgba(154, 135, 255, 0.25));
+  will-change: transform, opacity;
+}
+
+/* Subtle glow line below the brand text */
+.xova-glow-line {
+  width: 0;
+  height: 1px;
+  margin: 18px auto 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(114, 222, 239, 0.7) 50%,
+    transparent
+  );
+  transition: width 800ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.xova-glow-line.is-expanded {
+  width: min(320px, 60vw);
+}
+
+/* ================================================================
+   SKIP INTRO BUTTON
+   ================================================================ */
+
+#xova-skip-btn {
+  position: absolute;
+  right: clamp(20px, 4vw, 48px);
+  bottom: clamp(20px, 4vh, 40px);
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.5);
+  font-family: "DM Sans", sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: border-color 200ms ease, color 200ms ease, background 200ms ease;
+  /* Fade in after a short delay */
+  opacity: 0;
+  animation: skip-btn-appear 400ms ease 1800ms forwards;
+}
+
+#xova-skip-btn:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+#xova-skip-btn:focus-visible {
+  outline: 2px solid var(--accent-light, #c5baff);
+  outline-offset: 3px;
+}
+
+.skip-arrow {
+  font-size: 14px;
+  opacity: 0.7;
+}
+
+@keyframes skip-btn-appear {
+  to { opacity: 1; }
+}
+
+/* ================================================================
+   PROGRESS INDICATOR (optional subtle dot row at bottom)
+   ================================================================ */
+
+#xova-progress {
+  position: absolute;
+  bottom: clamp(20px, 4vh, 40px);
+  left: 50%;
+  z-index: 10;
+  display: flex;
+  gap: 6px;
+  transform: translateX(-50%);
+  opacity: 0;
+  animation: skip-btn-appear 400ms ease 1000ms forwards;
+}
+
+.progress-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  transition: background 400ms ease, transform 400ms ease;
+}
+
+.progress-dot.is-active {
+  background: rgba(114, 222, 239, 0.8);
+  transform: scale(1.4);
+}
+
+/* ================================================================
+   HOMEPAGE HERO — SPLIT LAYOUT (desktop)
+   Left: existing text content | Right: Three.js canvas
+   ================================================================ */
+
+/* The canvas lives inside .hero-visual on the right */
+#xova-hero-canvas-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+#xova-hero-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Hero split layout — only applied once intro is done */
+.hero.hero-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  min-height: 700px;
+  place-items: stretch;
+  text-align: left;
+}
+
+.hero.hero-split .hero-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 80px 0 80px clamp(24px, 5vw, 80px);
+  width: 100%;
+  max-width: none;
+}
+
+.hero.hero-split .hero-visual {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 500px;
+  overflow: hidden;
+}
+
+/* Fade-in for hero content during transition from intro */
+.hero-content-entering {
+  animation: hero-content-enter 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes hero-content-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Canvas transition from intro to hero position */
+.hero-canvas-entering {
+  animation: hero-canvas-enter 1000ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes hero-canvas-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ================================================================
+   STATIC FALLBACK (for prefers-reduced-motion or no WebGL)
+   ================================================================ */
+
+.hero-visual-fallback {
+  display: none;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+}
+
+.no-webgl .hero-visual-fallback,
+@media (prefers-reduced-motion: reduce) {
+  .hero-visual-fallback {
+    display: flex;
+  }
+}
+
+.fallback-glow {
+  width: min(400px, 90%);
+  height: min(400px, 90%);
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse at 40% 40%, rgba(154, 135, 255, 0.28), transparent 55%),
+    radial-gradient(ellipse at 65% 65%, rgba(114, 222, 239, 0.2), transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(112, 181, 255, 0.12), transparent 70%);
+  filter: blur(2px);
+}
+
+/* ================================================================
+   RESPONSIVE OVERRIDES
+   ================================================================ */
+
+@media (max-width: 900px) {
+  .hero.hero-split {
+    grid-template-columns: 1fr;
+    min-height: auto;
+    text-align: center;
+  }
+
+  .hero.hero-split .hero-content {
+    align-items: center;
+    padding: 70px clamp(24px, 5vw, 60px) 0;
+    order: 1;
+  }
+
+  .hero.hero-split .hero-visual {
+    order: 2;
+    min-height: 340px;
+    max-height: 380px;
+  }
+
+  .hero.hero-split .hero-button {
+    align-self: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .xova-letters {
+    font-size: clamp(56px, 18vw, 96px);
+  }
+
+  .hero.hero-split .hero-visual {
+    min-height: 260px;
+    max-height: 300px;
+  }
+}
+
+/* ================================================================
+   PREFERS-REDUCED-MOTION
+   When the user has reduced motion preference:
+   - Skip intro entirely (JS also checks this)
+   - No canvas animations
+   - Show static fallback in hero
+   ================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  #xova-intro {
+    display: none !important;
+  }
+
+  .hero.hero-split .hero-content {
+    animation: none !important;
+  }
+
+  .hero.hero-split .hero-visual canvas {
+    display: none;
+  }
+
+  .hero.hero-split .hero-visual-fallback {
+    display: flex;
+  }
+}
+

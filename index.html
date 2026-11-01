@@ -7,19 +7,81 @@
       name="description"
       content="Build confidence in English, one conversation at a time. Practice naturally with Xova."
     />
-    <meta name="theme-color" content="#080e1d" />
+    <meta name="theme-color" content="#060b18" />
     <title>Xova</title>
+
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
+
+    <!-- Three.js importmap — pinned to r167 for stability -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.167.1/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.167.1/examples/jsm/"
+        }
+      }
+    </script>
+
+    <!-- Styles: theme tokens → intro/particle → homepage layout -->
     <link rel="stylesheet" href="css/theme.css" />
+    <link rel="stylesheet" href="css/intro.css" />
     <link rel="stylesheet" href="css/style.css" />
+
+    <!-- Homepage JS (existing) -->
     <script src="js/script.js" defer></script>
+
+    <!-- Particle system + intro (ES modules, loaded after DOM) -->
+    <script type="module" src="js/intro.js"></script>
   </head>
   <body>
+    <!-- ============================================================
+         CINEMATIC INTRODUCTION OVERLAY
+         Hidden immediately if: prefers-reduced-motion, or already
+         seen this session (sessionStorage flag xova.introSeen).
+         JS adds .is-hidden to this element once done.
+         ============================================================ -->
+    <div id="xova-intro" role="presentation" aria-hidden="true">
+      <!-- WebGL canvas: Three.js renders here during intro,
+           then it is moved into .hero-visual after transition -->
+      <canvas id="xova-canvas"></canvas>
+
+      <!-- Stage 1: XOVA brand text -->
+      <div id="xova-brand-text">
+        <div class="xova-letters" aria-hidden="true">
+          <span class="xova-letter">X</span>
+          <span class="xova-letter">O</span>
+          <span class="xova-letter">V</span>
+          <span class="xova-letter">A</span>
+        </div>
+        <div class="xova-glow-line" aria-hidden="true"></div>
+      </div>
+
+      <!-- Skip button -->
+      <button
+        id="xova-skip-btn"
+        type="button"
+        aria-label="Skip introduction"
+      >
+        Skip <span class="skip-arrow" aria-hidden="true">→</span>
+      </button>
+
+      <!-- Progress dots (decorative) -->
+      <div id="xova-progress" aria-hidden="true">
+        <span class="progress-dot is-active"></span>
+        <span class="progress-dot"></span>
+        <span class="progress-dot"></span>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         EXISTING SITE HEADER — UNCHANGED
+         ============================================================ -->
     <header class="site-header">
       <div class="nav-shell">
         <a class="brand" href="#home" aria-label="Xova home">
@@ -66,9 +128,18 @@
     </header>
 
     <main>
+      <!-- ============================================================
+           HERO SECTION
+           Desktop: .hero-split grid → left content + right 3D canvas
+           Mobile: stacked (canvas below content)
+           JS adds .hero-split class after intro finishes.
+           ============================================================ -->
       <section class="hero section-shell" id="home" aria-labelledby="hero-title">
+        <!-- CSS decorative glows (behind content) -->
         <div class="hero-glow hero-glow-one" aria-hidden="true"></div>
         <div class="hero-glow hero-glow-two" aria-hidden="true"></div>
+
+        <!-- LEFT: existing hero content — preserved exactly -->
         <div class="hero-content reveal">
           <div class="eyebrow"><span class="eyebrow-dot"></span>Your personal English partner</div>
           <h1 id="hero-title">Speak freely.<br /><span class="gradient-text">Grow naturally.</span></h1>
@@ -81,6 +152,19 @@
           </a>
           <p class="hero-reassurance"><span aria-hidden="true">✳</span> No pressure. No judgment. Just practice.</p>
         </div>
+
+        <!-- RIGHT: 3D particle canvas (injected here by intro.js after transition) -->
+        <div class="hero-visual" aria-hidden="true">
+          <div id="xova-hero-canvas-wrap">
+            <!-- Canvas is moved here from #xova-intro after the intro sequence -->
+            <!-- Static fallback for no-WebGL / reduced motion -->
+            <div class="hero-visual-fallback">
+              <div class="fallback-glow"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CSS decorative elements (kept for non-split layout fallback) -->
         <div class="hero-orbit orbit-outer" aria-hidden="true"></div>
         <div class="hero-orbit orbit-inner" aria-hidden="true"></div>
         <span class="hero-spark spark-one" aria-hidden="true">✳</span>
@@ -88,6 +172,9 @@
         <div class="hero-caption" aria-hidden="true"><span></span> A little practice goes a long way</div>
       </section>
 
+      <!-- ============================================================
+           PRACTICE MODES — UNCHANGED
+           ============================================================ -->
       <section class="practice-section section-shell" id="practice" aria-labelledby="practice-title">
         <div class="section-heading reveal">
           <span class="section-kicker">Make it yours</span>
@@ -142,6 +229,9 @@
         </div>
       </section>
 
+      <!-- ============================================================
+           HOW IT WORKS — UNCHANGED
+           ============================================================ -->
       <section class="journey-section section-shell" id="how-it-works" aria-labelledby="journey-title">
         <div class="section-heading reveal">
           <span class="section-kicker">A simple way forward</span>
@@ -167,17 +257,23 @@
         </div>
       </section>
 
+      <!-- ============================================================
+           CLOSING CTA — UNCHANGED
+           ============================================================ -->
       <section class="closing-section section-shell reveal" aria-labelledby="closing-title">
         <div class="closing-glow" aria-hidden="true"></div>
         <span class="section-kicker">Your voice belongs here</span>
         <h2 id="closing-title">Your next conversation<br />starts <span class="gradient-text">here.</span></h2>
-        <p>Don’t wait until your English is perfect. Start practicing today.</p>
+        <p>Don't wait until your English is perfect. Start practicing today.</p>
         <a class="button button-primary closing-button" href="chat.html">
-          Let’s talk <span class="button-arrow" aria-hidden="true">→</span>
+          Let's talk <span class="button-arrow" aria-hidden="true">→</span>
         </a>
       </section>
     </main>
 
+    <!-- ============================================================
+         FOOTER — UNCHANGED
+         ============================================================ -->
     <footer class="site-footer section-shell">
       <a class="brand footer-brand" href="#home" aria-label="Xova home">
         <img class="brand-logo" src="images/logo.jpg" alt="Xova" width="1041" height="522" />

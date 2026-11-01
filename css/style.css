@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   font-family: var(--font-body);
   color: var(--text);
   background: var(--background);
@@ -189,6 +189,23 @@ button {
   text-align: center;
 }
 
+
+/* When .hero-split is added by intro.js, hide CSS-only decorative elements
+   since the 3D canvas provides the visual interest on the right side. */
+.hero.hero-split .hero-orbit,
+.hero.hero-split .hero-spark,
+.hero.hero-split .hero-caption {
+  display: none;
+}
+
+/* .hero-visual (right panel) is invisible until JS activates the split */
+.hero-visual {
+  display: none;
+}
+
+.hero.hero-split .hero-visual {
+  display: flex;
+}
 .hero-content {
   position: relative;
   z-index: 2;

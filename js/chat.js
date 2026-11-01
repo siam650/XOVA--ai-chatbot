@@ -30,6 +30,7 @@ const mobileLayout = window.matchMedia("(max-width: 700px)");
 const welcomeTitle = document.querySelector("#welcome-title");
 const welcomeCopy = document.querySelector("#welcome-copy");
 const suggestions = [...document.querySelectorAll(".suggestion")];
+const isLocalDevelopment = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
 
 let conversation;
 let isThinking = false;
@@ -38,6 +39,7 @@ let voiceStatusText = "Voice ready · tap to speak";
 let isEnding = false;
 let voiceRecognitionError = false;
 let voiceLoopEnabled = false;
+let isVoicePaused = false;
 let voiceRestartTimer;
 let isGeneratingReport = false;
 
@@ -149,6 +151,7 @@ function updateAddress() {
 function selectConversation(nextConversation) {
   window.XovaVoice.stopAll();
   voiceLoopEnabled = false;
+  isVoicePaused = false;
   window.clearTimeout(voiceRestartTimer);
   isEnding = false;
   isGeneratingReport = false;
@@ -283,10 +286,10 @@ function createThinkingRow() {
   row.className = "thinking-row";
   row.id = "thinking-row";
   row.setAttribute("role", "status");
-  row.setAttribute("aria-label", "Xova is thinking");
+  row.setAttribute("aria-label", "Xova is thinking. The first reply can take up to a minute while the server wakes up.");
   const bubble = document.createElement("span");
   bubble.className = "thinking-bubble";
-  bubble.append(document.createTextNode("Xova is thinking"));
+  bubble.append(document.createTextNode("Xova is thinking. The first reply can take up to a minute while the server wakes up."));
   const dots = document.createElement("span");
   dots.className = "thinking-dots";
   dots.setAttribute("aria-hidden", "true");
@@ -416,12 +419,17 @@ function updateControls() {
   voiceButton.disabled =
     ended || isEnding || window.XovaVoice.isStarting || !window.XovaVoice.isRecognitionSupported;
   voiceButton.setAttribute("aria-pressed", String(window.XovaVoice.isListening));
+  const isVoiceActive = window.XovaVoice.isListening || window.XovaVoice.isStarting;
   voiceButton.setAttribute(
     "aria-label",
-    window.XovaVoice.isListening ? "Stop listening" : "Start voice conversation",
+    isVoiceActive
+      ? "Pause voice conversation"
+      : isVoicePaused
+        ? "Resume voice conversation"
+        : "Start voice conversation",
   );
   voiceButton.classList.toggle("is-listening", window.XovaVoice.isListening);
-  voiceButtonLabel.textContent = window.XovaVoice.isListening ? "Stop" : "Listen";
+  voiceButtonLabel.textContent = isVoiceActive ? "Pause" : isVoicePaused ? "Resume" : "Listen";
   muteVoiceButton.disabled = ended || !window.XovaVoice.isSpeechSynthesisSupported;
   muteVoiceButton.setAttribute("aria-pressed", String(window.XovaVoice.isMuted));
   muteVoiceButton.textContent = window.XovaVoice.isMuted ? "Unmute voice" : "Mute voice";
@@ -447,9 +455,16 @@ function updateConversationTitle() {
 
 function sendMessage(text, metadata = {}) {
   const cleanText = text.trim();
+  if (isLocalDevelopment) {
+    console.debug("[Xova voice] Chat submission handler received message", {
+      source: metadata.source ?? "text",
+      characterCount: cleanText.length,
+      isThinking,
+      conversationEnded: Boolean(conversation.endedAt),
+    });
+  }
   if (!cleanText || isThinking || conversation.endedAt) return;
   const submittedAt = performance.now();
-  const isLocalDevelopment = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
   if (isLocalDevelopment) {
     console.debug("[Xova timing] User submitted message", {
       source: metadata.source ?? "text",
@@ -528,7 +543,7 @@ function sendMessage(text, metadata = {}) {
         onStart: () => {
           if (isLocalDevelopment) {
             console.debug(
-              "[Xova timing] Speech synthesis started",
+              "[Xova voice] Xova begins speaking",
               `${(performance.now() - submittedAt).toFixed(0)} ms after message submission`,
             );
           }
@@ -594,6 +609,7 @@ function scheduleVoiceListening() {
   window.clearTimeout(voiceRestartTimer);
   if (
     !voiceLoopEnabled ||
+    isVoicePaused ||
     isEnding ||
     isThinking ||
     conversation.endedAt ||
@@ -607,6 +623,7 @@ function scheduleVoiceListening() {
 function startVoiceListening() {
   if (
     !voiceLoopEnabled ||
+    isVoicePaused ||
     isEnding ||
     isThinking ||
     conversation.endedAt ||
@@ -627,6 +644,12 @@ function startVoiceListening() {
     },
     onTranscript: ({ text, confidence, source }) => {
       liveTranscript.textContent = `You said: ${text}`;
+      if (isLocalDevelopment) {
+        console.debug("[Xova voice] Voice submission triggered", {
+          source,
+          characterCount: text.length,
+        });
+      }
       sendMessage(text, { source, confidence });
     },
     onRecognitionEnd: () => {
@@ -638,6 +661,9 @@ function startVoiceListening() {
       }
       if (isEnding && !isThinking) {
         finishConversation();
+      } else if (isVoicePaused) {
+        voiceStatusText = "Voice paused · tap Resume";
+        updateControls();
       } else if (!isThinking && !conversation.endedAt) {
         voiceStatusText = getVoiceReadyStatus();
         updateControls();
@@ -841,6 +867,7 @@ function endConversation() {
   if (window.XovaVoice.isListening || window.XovaVoice.isStarting) {
     isEnding = true;
     voiceLoopEnabled = false;
+    isVoicePaused = true;
     voiceStatusText = "Finishing the current transcript…";
     window.XovaVoice.cancelSpeech();
     updateControls();
@@ -880,11 +907,12 @@ async function finishConversation() {
     isGeneratingReport = true;
     isEnding = true;
     voiceLoopEnabled = false;
+    isVoicePaused = true;
     window.clearTimeout(voiceRestartTimer);
     window.XovaVoice.stopAll();
     voiceStatusText = "Analyzing your conversation…";
     updateControls();
-    showReportMessage("Analyzing your complete conversation with Xova’s AI tutor…", "loading");
+    showReportMessage("Analyzing your complete conversation with Xova’s AI tutor… The server may take up to a minute to wake up.", "loading");
     const endedAt = new Date().toISOString();
     const transcriptMessages = conversationToAnalyze.messages.map((message) => ({ ...message }));
     const report = await window.XovaConversationAI.createLearningReport({
@@ -953,6 +981,9 @@ reportDialog.addEventListener("keydown", (event) => {
 
 function updateVoiceActivity() {
   if (window.XovaVoice.isListening) {
+    if (isLocalDevelopment) {
+      console.debug("[Xova voice] Listening resumes");
+    }
     voiceStatusText = "Listening · speak naturally";
   } else if (window.XovaVoice.isSpeaking) {
     voiceStatusText = "Xova is speaking";
@@ -962,18 +993,19 @@ function updateVoiceActivity() {
 
 voiceButton.addEventListener("click", () => {
   if (window.XovaVoice.isListening || window.XovaVoice.isStarting) {
-    voiceLoopEnabled = false;
-    voiceStatusText = "Finishing your sentence…";
+    isVoicePaused = true;
+    voiceStatusText = "Pausing voice conversation…";
     if (window.XovaVoice.isListening) {
       window.XovaVoice.stopListening();
     } else {
       window.XovaVoice.abortListening();
-      voiceStatusText = getVoiceReadyStatus();
+      voiceStatusText = "Voice paused · tap Resume";
     }
     updateControls();
     return;
   }
 
+  isVoicePaused = false;
   voiceLoopEnabled = true;
   startVoiceListening();
 });

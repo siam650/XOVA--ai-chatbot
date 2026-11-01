@@ -1,5 +1,8 @@
 (() => {
-  const FRONTEND_REQUEST_TIMEOUT_MS = 55000;
+  const FRONTEND_REQUEST_TIMEOUT_MS = 120000;
+  const LOCAL_HOSTNAMES = ["localhost", "127.0.0.1", "::1"];
+  const LOCAL_API_BASE_URL = "http://localhost:3000/api";
+  const isLocalDevelopment = LOCAL_HOSTNAMES.includes(window.location.hostname);
   const modes = {
     "casual-chat": "Casual Chat",
     "interview-practice": "Interview Practice",
@@ -8,41 +11,38 @@
   };
 
   function getApiBaseUrl() {
+    if (LOCAL_HOSTNAMES.includes(window.location.hostname)) {
+      return LOCAL_API_BASE_URL;
+    }
+
     const configuredUrl = document
       .querySelector('meta[name="xova-api-base-url"]')
       ?.content.trim();
-    if (configuredUrl) {
-      let url;
-      try {
-        url = new URL(configuredUrl);
-      } catch {
-        throw new Error("The Xova backend URL is invalid. Set the xova-api-base-url meta tag to your Render service URL.");
-      }
-
-      const localHost = ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
-      const pageIsLocal = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
-      if (url.protocol !== "https:" && !(localHost && pageIsLocal && url.protocol === "http:")) {
-        throw new Error("The deployed Xova backend URL must use HTTPS.");
-      }
-      if (localHost && !pageIsLocal) {
-        throw new Error("A deployed page cannot use a localhost backend URL. Set the Render service URL in chat.html.");
-      }
-      if (url.username || url.password || url.search || url.hash) {
-        throw new Error("The Xova backend URL must not contain credentials, a query string, or a fragment.");
-      }
-
-      const apiPath = url.pathname.replace(/\/+$/, "");
-      url.pathname = apiPath.endsWith("/api") ? apiPath : `${apiPath}/api`;
-      return url.toString().replace(/\/+$/, "");
+    if (!configuredUrl) {
+      throw new Error(
+        "The AI backend URL is not configured for this site. Set the xova-api-base-url meta tag in chat.html to your Render API URL, ending in /api.",
+      );
     }
 
-    if (["localhost", "127.0.0.1", "::1"].includes(window.location.hostname)) {
-      return "http://localhost:3000/api";
+    let url;
+    try {
+      url = new URL(configuredUrl);
+    } catch {
+      throw new Error("The Xova backend URL is invalid. Set the xova-api-base-url meta tag to your Render service URL.");
     }
-
-    throw new Error(
-      "The AI backend URL is not configured for this site. Set the xova-api-base-url meta tag in chat.html to your Render service URL, ending in /api.",
-    );
+    if (url.protocol !== "https:") {
+      throw new Error("The deployed Xova backend URL must use HTTPS.");
+    }
+    if (
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      url.pathname.replace(/\/+$/, "") !== "/api"
+    ) {
+      throw new Error("The Xova backend URL must end in /api and must not contain credentials, a query string, or a fragment.");
+    }
+    return `${url.origin}/api`;
   }
 
   async function request(endpoint, body, { onTiming } = {}) {
@@ -55,6 +55,9 @@
       FRONTEND_REQUEST_TIMEOUT_MS,
     );
     onTiming?.("Frontend sent API request", 0);
+    if (isLocalDevelopment) {
+      console.debug("[Xova voice] API request starts", { endpoint });
+    }
     try {
       response = await window.fetch(`${baseUrl}${endpoint}`, {
         method: "POST",
@@ -62,12 +65,18 @@
         body: JSON.stringify(body),
         signal: controller.signal,
       });
+      if (isLocalDevelopment) {
+        console.debug("[Xova voice] Backend response received", {
+          endpoint,
+          status: response.status,
+        });
+      }
     } catch (error) {
       if (controller.signal.aborted) {
-        throw new Error("The Xova backend took too long to respond. Please try again in a moment.");
+        throw new Error("Xova is taking longer than expected to respond. The server may be waking up; please try again shortly.");
       }
       throw new Error(
-        "Cannot reach the Xova backend. Check that the Render service is running, the backend URL is correct, and CORS allows this website.",
+        "Cannot reach Xova yet. The server may be waking up; please check your connection and try again shortly.",
       );
     } finally {
       window.clearTimeout(timeoutId);

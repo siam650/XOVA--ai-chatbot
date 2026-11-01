@@ -5,8 +5,11 @@
     typeof window.speechSynthesis.cancel === "function" &&
     typeof window.SpeechSynthesisUtterance === "function";
 
-  const DEFAULT_END_OF_SPEECH_SILENCE_MS = 2500;
+  const DEFAULT_END_OF_SPEECH_SILENCE_MS = 2000;
   const RECOGNITION_RESTART_DELAY_MS = 180;
+  const isLocalDevelopment = ["localhost", "127.0.0.1", "::1"].includes(
+    window.location.hostname,
+  );
   let recognition = null;
   let recognitionStarting = false;
   let recognitionActive = false;
@@ -20,14 +23,16 @@
   }
 
   function getFinalTranscript(session) {
-    return session.finalResults.map((result) => result.text).filter(Boolean).join(" ").trim();
+    return session.finalResults
+      .filter(Boolean)
+      .map((result) => result.text)
+      .filter(Boolean)
+      .join(" ")
+      .trim();
   }
 
-  function getFinalConfidence(session) {
-    const scores = session.finalResults
-      .map((result) => result.confidence)
-      .filter(Number.isFinite);
-    return scores.length ? Math.min(...scores) : null;
+  function isUsableFinalResult(result) {
+    return Boolean(result.text && /[a-z0-9]/i.test(result.text));
   }
 
   function getVisibleTranscript(session, recognitionState = session.currentState) {
@@ -57,56 +62,58 @@
 
     clearSilenceTimer(session);
     session.silenceTimer = window.setTimeout(() => {
+      session.silenceTimer = null;
+      const currentFinalTranscript = session.currentState
+        ? getFinalTranscript(session.currentState)
+        : "";
+      if (!session.segments.length && !currentFinalTranscript) {
+        if (session.currentState) {
+          session.currentState.interimTranscript = "";
+          notify(session.handlers, "onInterim", getVisibleTranscript(session));
+        }
+        return;
+      }
+
       session.finishRequested = true;
       window.clearTimeout(session.restartTimer);
-      if (session.current && (recognitionActive || recognitionStarting)) {
-        stopRecognition(session, "Could not finish speech recognition after a pause.");
-      } else {
-        completeVoiceSession(session);
-      }
+      stopRecognition(session, "Could not stop speech recognition after a pause.");
     }, endOfSpeechSilenceMs);
   }
 
   function commitRecognitionResults(session, recognitionState) {
     if (recognitionState.committed) return;
     recognitionState.committed = true;
-    const text = getFinalTranscript(recognitionState);
-    if (!text) return;
-    session.segments.push({ text, confidence: getFinalConfidence(recognitionState) });
+    const results = recognitionState.finalResults.filter(
+      (result) => result && isUsableFinalResult(result),
+    );
+    if (!results.length) return;
+    const text = results.map((result) => result.text).join(" ").trim();
+    const scores = results.map((result) => result.confidence).filter(Number.isFinite);
+    session.segments.push({
+      text,
+      confidence: scores.length ? Math.min(...scores) : null,
+    });
   }
 
   function stopRecognition(session, reason) {
     const instance = session.current;
-    if (!instance) {
-      completeVoiceSession(session);
-      return;
+    if (session.currentState) {
+      commitRecognitionResults(session, session.currentState);
     }
 
-    try {
-      instance.stop();
-      return;
-    } catch (error) {
-      console.error(reason, error);
-    }
-
-    try {
-      instance.abort();
-      return;
-    } catch (error) {
-      console.error("Could not abort speech recognition.", error);
-    }
-
-    if (session.current === instance) {
-      if (session.currentState) {
-        commitRecognitionResults(session, session.currentState);
+    if (instance) {
+      try {
+        instance.stop();
+      } catch (error) {
+        console.error(reason, error);
+        try {
+          instance.abort();
+        } catch (abortError) {
+          console.error("Could not abort speech recognition.", abortError);
+        }
       }
-      session.current = null;
-      session.currentState = null;
-      recognition = null;
-      recognitionStarting = false;
-      recognitionActive = false;
-      completeVoiceSession(session);
     }
+    completeVoiceSession(session);
   }
 
   function completeVoiceSession(session) {
@@ -119,6 +126,12 @@
       .map((segment) => segment.confidence)
       .filter(Number.isFinite);
     const confidence = scores.length ? Math.min(...scores) : null;
+    if (isLocalDevelopment && text) {
+      console.debug("[Xova voice] Final transcript assembled", {
+        characterCount: text.length,
+        segmentCount: session.segments.length,
+      });
+    }
     voiceSession = null;
     recognition = null;
     recognitionStarting = false;
@@ -182,37 +195,46 @@
       notify(session.handlers, "onListening", true);
     };
 
-    instance.onspeechstart = () => {
-      if (!isCurrent()) return;
-      clearSilenceTimer(session);
-    };
-
-    instance.onspeechend = () => {
-      if (!isCurrent()) return;
-      scheduleSilenceCompletion(session);
-    };
-
     instance.onresult = (event) => {
       if (!isCurrent()) return;
-      recognitionState.finalResults = [];
+      if (isLocalDevelopment) {
+        console.debug("[Xova voice] Speech recognition received a result", {
+          resultCount: event.results.length,
+        });
+      }
+      const previousFinalTranscript = getFinalTranscript(recognitionState);
       recognitionState.interimTranscript = "";
+      let finalResultCount = 0;
       for (let index = 0; index < event.results.length; index += 1) {
         const result = event.results[index];
         const alternative = result[0];
         const text = alternative.transcript.trim();
         if (!text) continue;
         if (result.isFinal) {
-          recognitionState.finalResults.push({
+          finalResultCount += 1;
+          const finalResult = {
             text,
             confidence: Number.isFinite(alternative.confidence) ? alternative.confidence : null,
-          });
+          };
+          if (isUsableFinalResult(finalResult)) {
+            recognitionState.finalResults[index] = finalResult;
+          }
         } else {
           recognitionState.interimTranscript += `${recognitionState.interimTranscript ? " " : ""}${text}`;
         }
       }
 
-      if (recognitionState.interimTranscript) clearSilenceTimer(session);
-      else if (getFinalTranscript(recognitionState)) scheduleSilenceCompletion(session);
+      const finalTranscript = getFinalTranscript(recognitionState);
+      if (finalTranscript && finalTranscript !== previousFinalTranscript) {
+        scheduleSilenceCompletion(session);
+      }
+      if (isLocalDevelopment) {
+        console.debug("[Xova voice] Recognition result classified", {
+          finalResultCount,
+          acceptedFinalResultCount: recognitionState.finalResults.length,
+          hasInterimResult: Boolean(recognitionState.interimTranscript),
+        });
+      }
       notify(session.handlers, "onInterim", getVisibleTranscript(session));
     };
 

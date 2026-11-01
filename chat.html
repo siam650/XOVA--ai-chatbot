@@ -84,8 +84,8 @@
               <span aria-hidden="true">＋</span>
               <span>New conversation</span>
             </button>
-            <button class="end-chat-button" id="end-chat-button" type="button" disabled>
-              <span class="end-chat-full-label">End conversation</span>
+            <button class="end-chat-button" id="end-chat-button" type="button" aria-label="End Conversation" disabled>
+              <span class="end-chat-full-label">End Conversation</span>
               <span class="end-chat-short-label" aria-hidden="true">End</span>
             </button>
             <button class="view-report-button" id="view-report-button" type="button" hidden>
@@ -108,8 +108,8 @@
               <div class="empty-state" id="empty-state">
                 <div class="welcome-mark" aria-hidden="true">✳</div>
                 <p class="welcome-kicker">A little practice goes a long way</p>
-                <h2>A space to practice,<br /><span>at your own pace.</span></h2>
-                <p class="welcome-copy">
+                <h2 id="welcome-title">A space to practice,<br /><span>at your own pace.</span></h2>
+                <p class="welcome-copy" id="welcome-copy">
                   Say hello, share a thought, or tell me how your day is going. Mistakes are part
                   of learning here.
                 </p>
@@ -154,7 +154,7 @@
                 </button>
               </div>
             </section>
-            <p class="demo-note">Push to talk · speech depends on browser support · Xova replies are mock</p>
+            <p class="demo-note">Voice conversation · speech depends on browser support · Xova replies and learning report are prototypes</p>
             <form class="composer" id="message-form">
               <label class="visually-hidden" for="message-input">Your message in English</label>
               <textarea

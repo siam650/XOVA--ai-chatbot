@@ -2,7 +2,7 @@
   const modes = {
     "casual-chat": "Casual Chat",
     "interview-practice": "Interview Practice",
-    debate: "Debate",
+    debate: "Debate & Discussion",
     storytelling: "Storytelling",
   };
 
@@ -35,7 +35,7 @@
       example: "I will go to school tomorrow.",
     },
     {
-      pattern: /\bdidn't\s+(went)\b/gi,
+      pattern: /\bdidn['’]t\s+(went)\b/gi,
       replacement: "go",
       category: "Verb forms after helping verbs",
       explanation: "Use the base form after “didn't”; the past tense is already carried by did.",
@@ -59,7 +59,7 @@
       example: "Yesterday I went to university.",
     },
     {
-      pattern: /\b(?:he|she|it)\s+(don't)\b/gi,
+      pattern: /\b(?:he|she|it)\s+(don['’]t)\b/gi,
       replacement: "doesn't",
       category: "Subject–verb agreement",
       explanation: "Use “doesn't” with he, she, and it.",
@@ -83,7 +83,7 @@
       example: "Yesterday I met my friend.",
     },
     {
-      pattern: /\bi\s+am\s+(agree)\b/gi,
+      pattern: /\bi\s+(am\s+agree)\b/gi,
       replacement: "agree",
       category: "Verb forms after helping verbs",
       explanation: "“Agree” is a verb, so it doesn’t need “am” before it.",
@@ -99,12 +99,36 @@
       example: "She goes to work by bus.",
     },
     {
-      pattern: /\byou\s+(was)\b/gi,
+      pattern: /\b(?:you|we|they)\s+(was)\b/gi,
       replacement: "were",
       category: "Past-tense verb forms",
       explanation: 'Use “were” with “you.”',
       tip: "Remember the past forms: I/he/she/it was; you/we/they were.",
       example: "You were right about that.",
+    },
+    {
+      pattern: /\b(?:i)\s+(is)\b/gi,
+      replacement: "am",
+      category: "Subject–verb agreement",
+      explanation: 'Use “am” with the subject “I.”',
+      tip: "Match the present form of be to its subject: I am; he/she/it is; you/we/they are.",
+      example: "I am ready to begin.",
+    },
+    {
+      pattern: /\b(?:he|she|it)\s+(are)\b/gi,
+      replacement: "is",
+      category: "Subject–verb agreement",
+      explanation: "Use “is” with he, she, or it.",
+      tip: "Match the present form of be to its subject: I am; he/she/it is; you/we/they are.",
+      example: "She is studying at university.",
+    },
+    {
+      pattern: /\b(?:i|he|she|it|we|they|you)\s+(goed)\b/gi,
+      replacement: "went",
+      category: "Irregular past-tense verbs",
+      explanation: "The past tense of “go” is “went,” not “goed.”",
+      tip: "Learn common irregular past forms individually: go → went → gone.",
+      example: "We went to the park yesterday.",
     },
     {
       pattern: /\b(?:he|she|it)\s+(like)\b/gi,
@@ -179,9 +203,47 @@
   }
 
   function getMockReply(message, mode, replyIndex) {
+    if (mode === "Interview Practice") {
+      if (replyIndex === 0) {
+        return "Thanks for joining me. Could you briefly introduce yourself and describe the experience most relevant to the role?";
+      }
+      if (/\b(challenge|difficult|problem|mistake|conflict)\b/i.test(message)) {
+        return "Thank you for sharing that example. What action did you take, and what was the outcome?";
+      }
+      if (/\b(skill|strength|good at|proud)\b/i.test(message)) {
+        return "That sounds like a useful strength. Can you describe one specific time you used it?";
+      }
+      if (/\b(result|learn|outcome|success)\b/i.test(message)) {
+        return "Thanks, that gives me a clear picture. What would you bring to this role that you are most proud of?";
+      }
+      return "Thank you for that answer. Could you give me one specific example that shows the impact of your work?";
+    }
+
+    if (mode === "Debate" || mode === "Debate & Discussion") {
+      if (replyIndex === 0) {
+        return "I understand your position. What evidence or real-world example best supports your view?";
+      }
+      if (/\b(because|reason|evidence|example|study|data)\b/i.test(message)) {
+        return "That is a reasonable point. Someone might argue that the other side also has benefits; how would you respond to that counterargument?";
+      }
+      return "I see why you think that. A different perspective could lead to the opposite conclusion; what is your strongest reason for disagreeing with it?";
+    }
+
+    if (mode === "Storytelling") {
+      if (/\b(first|then|after|finally|next)\b/i.test(message)) {
+        return "I can picture the sequence. What did the place look or sound like, and how did you feel at that moment?";
+      }
+      if (/\b(feel|felt|emotion|nervous|excited|surprised)\b/i.test(message)) {
+        return "That feeling adds a lot to the story. What happened just before that moment?";
+      }
+      return "I’m following your story. What happened next, and what is one detail you remember clearly?";
+    }
+
     if (/\b(hello|hi|hey|good morning|good evening)\b/i.test(message)) {
       const name = message.match(/\b(?:my name is|i'm|i am)\s+([a-z'-]+)/i)?.[1];
-      return name
+      const isCommonDescription =
+        /^(ready|happy|fine|good|okay|ok|excited|glad|tired|new|here|trying|learning)\b/i.test(name ?? "");
+      return name && !isCommonDescription
         ? `Hi, ${name}! It’s lovely to meet you. What would you like to chat about today?`
         : "Hi! It’s lovely to chat with you. How has your day been so far?";
     }
@@ -189,18 +251,6 @@
     const contextual = contextualReplies.find((item) => item.pattern.test(message));
     if (contextual) return contextual.reply;
 
-    if (mode === "Interview Practice") {
-      if (/\b(weakness|challenge|difficult)\b/i.test(message)) {
-        return "That’s a thoughtful example. How did you handle the challenge, and what did you learn from it?";
-      }
-      return "Let’s practice shaping that into a clear interview answer. Could you share a specific example?";
-    }
-    if (mode === "Debate") {
-      return "That’s an interesting point of view. What’s the strongest reason someone might agree with you?";
-    }
-    if (mode === "Storytelling") {
-      return "I’m following along. What happened next, and what detail do you remember most?";
-    }
     return fallbackReplies[replyIndex % fallbackReplies.length];
   }
 
@@ -295,15 +345,23 @@
     const priorityAreas = [...counts.entries()]
       .sort((first, second) => second[1] - first[1])
       .slice(0, 3)
-      .map(([area]) => ({
+      .map(([area, count]) => ({
         title: area,
         detail: grammarMistakes.find((mistake) => mistake.category === area)?.tip ?? "Practice this pattern in a few new sentences.",
+        count,
+        observed: true,
       }));
-    const fallbackAreas = [
-      { title: "Add details to your ideas", detail: "Try adding a reason, example, or detail to help your conversation partner follow your thought." },
-      { title: "Build a varied vocabulary", detail: "Notice useful words from the conversation and try using them in a new sentence." },
-      { title: "Keep expressing your ideas", detail: "Regular, relaxed practice helps you share ideas more naturally over time." },
-    ];
+    const fallbackAreas = grammarMistakes.length
+      ? [
+          { title: "Add details to your ideas", detail: "As a practice focus, try adding a reason, example, or detail to help your conversation partner follow your thought.", observed: false },
+          { title: "Build a varied vocabulary", detail: "As a practice focus, notice useful words from the conversation and try using them in a new sentence.", observed: false },
+          { title: "Keep expressing your ideas", detail: "Regular, relaxed practice helps you share ideas more naturally over time.", observed: false },
+        ]
+      : [
+          { title: "No repeated grammar pattern detected", detail: "The prototype did not match a recurring grammar pattern in this transcript; this is not proof that every sentence is error-free.", observed: false },
+          { title: "Add details to your ideas", detail: "As a practice focus, try adding a reason, example, or detail to help your conversation partner follow your thought.", observed: false },
+          { title: "Build a varied vocabulary", detail: "As a practice focus, notice useful words from the conversation and try using them in a new sentence.", observed: false },
+        ];
     fallbackAreas.forEach((area) => {
       if (priorityAreas.length < 3) priorityAreas.push(area);
     });
@@ -346,6 +404,7 @@
     const modeExercise = {
       "Interview Practice": "Answer this practice question in 2–3 sentences: What is one skill you are proud of, and when have you used it?",
       Debate: "Share one opinion, give one reason, and add an example to support it.",
+      "Debate & Discussion": "Share one opinion, give one reason, and add an example to support it.",
       Storytelling: "Describe a small event from your week using a beginning, a middle, and an ending.",
       "Casual Chat": "Write three sentences about something you enjoy and explain why you enjoy it.",
     }[conversation.mode];
@@ -381,7 +440,7 @@
       practiceNext,
       finalSummary,
       transcript: messages,
-      note: "Prototype report: example-based pattern matching, not an AI assessment. It may miss mistakes or flag acceptable wording. Voice transcripts are especially uncertain; review them before treating a match as an error.",
+      note: "Prototype report: example-based pattern matching, not an AI assessment. It can miss grammar mistakes and may flag acceptable informal English. Speech-recognition errors are not reliably distinguishable from learner errors; verify voice transcripts before treating a match as an error.",
     };
   }
 

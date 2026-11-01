@@ -27,6 +27,9 @@ const liveTranscript = document.querySelector("#live-transcript");
 const muteVoiceButton = document.querySelector("#mute-voice-button");
 const stopSpeakingButton = document.querySelector("#stop-speaking-button");
 const mobileLayout = window.matchMedia("(max-width: 700px)");
+const welcomeTitle = document.querySelector("#welcome-title");
+const welcomeCopy = document.querySelector("#welcome-copy");
+const suggestions = [...document.querySelectorAll(".suggestion")];
 
 let conversation;
 let thinkingTimer;
@@ -36,6 +39,52 @@ let noticeTimer;
 let voiceStatusText = "Voice ready · tap to speak";
 let isEnding = false;
 let voiceRecognitionError = false;
+let voiceLoopEnabled = false;
+let voiceRestartTimer;
+let isGeneratingReport = false;
+
+const welcomeContent = {
+  "Casual Chat": {
+    title: ["A space to practice,", "at your own pace."],
+    copy: "Talk naturally about daily life, hobbies, university, travel, or anything on your mind. Mistakes are part of learning here.",
+    prompts: [
+      ["What do you like to do in your free time?", "What do you like to do in your free time?"],
+      ["Tell me about something that made you smile today.", "Something that made you smile today"],
+    ],
+  },
+  "Interview Practice": {
+    title: ["Build confidence,", "one answer at a time."],
+    copy: "Practice a professional interview. Xova will ask one realistic question at a time and follow up on your answers.",
+    prompts: [
+      ["Could you tell me about yourself?", "Tell me about yourself"],
+      ["What is one skill you are proud of?", "Practice a strengths question"],
+    ],
+  },
+  Debate: {
+    title: ["Explore both sides,", "support your ideas."],
+    copy: "Let’s discuss whether universities should offer more courses online. What do you think? Share a reason or example, and we’ll explore both sides.",
+    prompts: [
+      ["I think online courses are helpful because they are flexible.", "Argue for online courses"],
+      ["I prefer in-person classes because students can interact more.", "Argue for in-person classes"],
+    ],
+  },
+  "Debate & Discussion": {
+    title: ["Explore both sides,", "support your ideas."],
+    copy: "Let’s discuss whether universities should offer more courses online. What do you think? Share a reason or example, and we’ll explore both sides.",
+    prompts: [
+      ["I think online courses are helpful because they are flexible.", "Argue for online courses"],
+      ["I prefer in-person classes because students can interact more.", "Argue for in-person classes"],
+    ],
+  },
+  Storytelling: {
+    title: ["Tell your story,", "one detail at a time."],
+    copy: "Share a real or imagined experience. Xova will help you build a clear sequence, add descriptions, and keep your story flowing.",
+    prompts: [
+      ["Tell me about a memorable day from your life.", "A memorable day"],
+      ["Describe a time something unexpected happened.", "An unexpected moment"],
+    ],
+  },
+};
 
 function showNotice(message) {
   storageNotice.textContent = message;
@@ -44,6 +93,23 @@ function showNotice(message) {
   noticeTimer = window.setTimeout(() => {
     storageNotice.hidden = true;
   }, 6000);
+}
+
+function renderWelcome(mode) {
+  const content = welcomeContent[mode] ?? welcomeContent["Casual Chat"];
+  const accent = document.createElement("span");
+  accent.textContent = content.title[1];
+  welcomeTitle.replaceChildren(
+    document.createTextNode(content.title[0]),
+    document.createElement("br"),
+    accent,
+  );
+  welcomeCopy.textContent = content.copy;
+  suggestions.forEach((suggestion, index) => {
+    const [prompt, label] = content.prompts[index];
+    suggestion.dataset.prompt = prompt;
+    suggestion.textContent = label;
+  });
 }
 
 function makeTemporaryConversation(mode) {
@@ -75,12 +141,19 @@ function updateAddress() {
   const url = new URL(window.location.href);
   url.search = "";
   url.searchParams.set("conversation", conversation.id);
+  const modeKey = Object.entries(window.XovaMockAI.modes)
+    .find(([, label]) => label === conversation.mode)?.[0]
+    ?? (conversation.mode === "Debate" ? "debate" : null);
+  if (modeKey) url.searchParams.set("mode", modeKey);
   window.history.replaceState(null, "", url);
 }
 
 function selectConversation(nextConversation) {
   window.XovaVoice.stopAll();
+  voiceLoopEnabled = false;
+  window.clearTimeout(voiceRestartTimer);
   isEnding = false;
+  isGeneratingReport = false;
   liveTranscript.textContent = "";
   conversation = nextConversation;
   replyIndex = conversation.messages.filter((message) => message.role === "assistant").length;
@@ -93,6 +166,7 @@ function selectConversation(nextConversation) {
   updateAddress();
   renderConversation();
   renderHistory();
+  if (conversation.report) openReport();
   if (mobileLayout.matches) {
     setSidebarOpen(false);
     sidebarToggle.focus();
@@ -164,6 +238,7 @@ function initializeConversation() {
   updateAddress();
   renderConversation();
   renderHistory();
+  if (conversation.report) openReport();
 }
 
 function createAvatar() {
@@ -232,6 +307,7 @@ function renderConversation() {
   voiceStatusText = conversation.endedAt ? "Conversation complete" : getVoiceReadyStatus();
   currentMode.textContent = conversation.mode;
   document.title = `${conversation.mode} — Xova`;
+  renderWelcome(conversation.mode);
   messageList.replaceChildren(emptyState);
   emptyState.hidden = conversation.messages.length > 0;
   conversation.messages.forEach((message) => messageList.append(createMessageRow(message)));
@@ -327,7 +403,7 @@ function getVoiceReadyStatus() {
   if (!window.XovaVoice.isSpeechSynthesisSupported) {
     return "Voice ready · playback unsupported";
   }
-  return "Voice ready · tap to speak";
+  return "Voice ready · tap Listen to begin";
 }
 
 function updateControls() {
@@ -338,7 +414,7 @@ function updateControls() {
   sidebarNewChat.disabled = isThinking || isEnding;
   headerNewChat.disabled = isThinking || isEnding;
   endChatButton.disabled =
-    !hasMessages || isThinking || ended || isEnding || window.XovaVoice.isStarting;
+    !hasMessages || isThinking || ended || isEnding;
   endChatButton.hidden = ended;
   viewReportButton.hidden = !conversation.report;
   voiceButton.disabled =
@@ -346,10 +422,10 @@ function updateControls() {
   voiceButton.setAttribute("aria-pressed", String(window.XovaVoice.isListening));
   voiceButton.setAttribute(
     "aria-label",
-    window.XovaVoice.isListening ? "Stop listening" : "Start speaking",
+    window.XovaVoice.isListening ? "Stop listening" : "Start voice conversation",
   );
   voiceButton.classList.toggle("is-listening", window.XovaVoice.isListening);
-  voiceButtonLabel.textContent = window.XovaVoice.isListening ? "Stop" : "Speak";
+  voiceButtonLabel.textContent = window.XovaVoice.isListening ? "Stop" : "Listen";
   muteVoiceButton.disabled = ended || !window.XovaVoice.isSpeechSynthesisSupported;
   muteVoiceButton.setAttribute("aria-pressed", String(window.XovaVoice.isMuted));
   muteVoiceButton.textContent = window.XovaVoice.isMuted ? "Unmute voice" : "Mute voice";
@@ -417,6 +493,7 @@ function sendMessage(text, metadata = {}) {
       showNotice("Xova could not generate a reply. Your message is saved; you can send another one.");
       updateControls();
       if (isEnding) finishConversation();
+      else scheduleVoiceListening();
       return;
     }
     replyIndex += 1;
@@ -439,6 +516,7 @@ function sendMessage(text, metadata = {}) {
         onEnd: () => {
           voiceStatusText = getVoiceReadyStatus();
           updateControls();
+          scheduleVoiceListening();
         },
         onError: () => {
           voiceStatusText = "Voice playback unavailable · read the transcript below";
@@ -447,10 +525,12 @@ function sendMessage(text, metadata = {}) {
         onUnavailable: () => {
           voiceStatusText = "Voice playback unsupported · read Xova’s written reply";
           updateControls();
+          scheduleVoiceListening();
         },
       });
     } else {
       voiceStatusText = "Voice muted · read Xova’s reply below";
+      scheduleVoiceListening();
     }
     updateControls();
     renderHistory();
@@ -485,6 +565,78 @@ function syncSidebar() {
 
 function createNewConversation() {
   if (!isThinking) startConversation(conversation.mode);
+}
+
+function scheduleVoiceListening() {
+  window.clearTimeout(voiceRestartTimer);
+  if (
+    !voiceLoopEnabled ||
+    isEnding ||
+    isThinking ||
+    conversation.endedAt ||
+    !window.XovaVoice.isRecognitionSupported
+  ) {
+    return;
+  }
+  voiceRestartTimer = window.setTimeout(startVoiceListening, 300);
+}
+
+function startVoiceListening() {
+  if (
+    !voiceLoopEnabled ||
+    isEnding ||
+    isThinking ||
+    conversation.endedAt ||
+    window.XovaVoice.isListening ||
+    window.XovaVoice.isStarting
+  ) {
+    return;
+  }
+
+  liveTranscript.textContent = "";
+  voiceRecognitionError = false;
+  voiceStatusText = "Requesting microphone access…";
+  updateControls();
+  const started = window.XovaVoice.startListening({
+    onListening: updateVoiceActivity,
+    onInterim: (text) => {
+      liveTranscript.textContent = text ? `Hearing: ${text}` : "";
+    },
+    onTranscript: ({ text, confidence, source }) => {
+      liveTranscript.textContent = `You said: ${text}`;
+      sendMessage(text, { source, confidence });
+    },
+    onRecognitionEnd: () => {
+      if (voiceRecognitionError) {
+        voiceRecognitionError = false;
+        if (isEnding && !isThinking) finishConversation();
+        else scheduleVoiceListening();
+        return;
+      }
+      if (isEnding && !isThinking) {
+        finishConversation();
+      } else if (!isThinking && !conversation.endedAt) {
+        voiceStatusText = getVoiceReadyStatus();
+        updateControls();
+      }
+    },
+    onError: ({ code, message }) => {
+      voiceRecognitionError = true;
+      const noSpeech = code === "no-speech";
+      if (!noSpeech) voiceLoopEnabled = false;
+      voiceStatusText = noSpeech && voiceLoopEnabled
+        ? "No speech detected · listening again"
+        : message;
+      liveTranscript.textContent = "";
+      updateControls();
+      if (!noSpeech && code !== "aborted") showNotice(message);
+    },
+  });
+  if (!started && window.XovaVoice.isRecognitionSupported) {
+    voiceLoopEnabled = false;
+    voiceStatusText = "Could not start microphone · check browser permissions";
+    updateControls();
+  }
 }
 
 function appendReportSection(title, items = [], renderItem) {
@@ -531,8 +683,13 @@ function renderReport(report) {
       report.strengths ?? ["You completed this practice conversation and kept sharing ideas."],
     ),
   );
-  appendReportSection("Three priority areas", report.priorityAreas ?? [], (area) =>
-    reportListItem(area.title, area.detail),
+  appendReportSection("Top 3 recurring weaknesses / practice priorities", report.priorityAreas ?? [], (area) =>
+    reportListItem(
+      area.title,
+      area.detail,
+      typeof area.count === "number" ? "Transcript matches" : "",
+      typeof area.count === "number" ? String(area.count) : "",
+    ),
   );
   appendReportSection("Voice transcripts to review", report.uncertainTranscripts ?? [], (item) =>
     reportListItem(
@@ -544,14 +701,17 @@ function renderReport(report) {
         : "Not provided by the browser · verify the transcript against what you said",
     ),
   );
-  const grammarSection = appendReportSection("Grammar to practice", report.grammarMistakes ?? [], (mistake) =>
-    reportListItem(
-      mistake.original,
-      `Suggested correction: ${mistake.corrected}`,
-      "Explanation",
-      mistake.explanation,
-    ),
-  );
+  const grammarSection = appendReportSection("Grammar to practice", report.grammarMistakes ?? [], (mistake) => {
+    const item = reportListItem("Original sentence", mistake.original);
+    const corrected = document.createElement("p");
+    corrected.className = "report-correction";
+    corrected.textContent = `Corrected sentence: ${mistake.corrected}`;
+    const explanation = document.createElement("p");
+    explanation.className = "report-extra";
+    explanation.textContent = `Explanation: ${mistake.explanation}`;
+    item.append(corrected, explanation);
+    return item;
+  });
   (report.grammarMistakes ?? []).forEach((mistake, index) => {
     const item = grammarSection.querySelectorAll("li")[index];
     if (!item) return;
@@ -575,7 +735,7 @@ function renderReport(report) {
   if (!(report.grammarMistakes ?? []).length) {
     const message = document.createElement("p");
     message.className = "report-empty-note";
-    message.textContent = "No matching examples from the demo grammar patterns appeared in this conversation.";
+    message.textContent = "The prototype found no matches in its example-based grammar rules. This does not confirm that every sentence is error-free.";
     reportContent.append(message);
   }
   appendReportSection("More natural expressions", report.naturalSuggestions ?? [], (suggestion) =>
@@ -605,6 +765,17 @@ function renderReport(report) {
   reportContent.append(final);
 }
 
+function showReportMessage(message) {
+  reportContent.replaceChildren();
+  const status = document.createElement("p");
+  status.className = "report-summary";
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  status.textContent = message;
+  reportContent.append(status);
+  if (!reportDialog.open) reportDialog.showModal();
+}
+
 function createReportTextSection(title, items) {
   const section = document.createElement("section");
   section.className = "report-section";
@@ -618,12 +789,18 @@ function createReportTextSection(title, items) {
 
 function endConversation() {
   if ((endChatButton.disabled && !window.XovaVoice.isListening) || isEnding) return;
-  if (window.XovaVoice.isListening) {
+  if (window.XovaVoice.isListening || window.XovaVoice.isStarting) {
     isEnding = true;
+    voiceLoopEnabled = false;
     voiceStatusText = "Finishing the current transcript…";
     window.XovaVoice.cancelSpeech();
     updateControls();
-    window.XovaVoice.stopListening();
+    if (window.XovaVoice.isListening) {
+      window.XovaVoice.stopListening();
+    } else {
+      window.XovaVoice.abortListening();
+      finishConversation();
+    }
     return;
   }
   finishConversation();
@@ -636,16 +813,39 @@ async function finishConversation() {
     updateControls();
     return;
   }
-  try {
-    isEnding = true;
-    window.XovaVoice.stopAll();
-    voiceStatusText = "Preparing your learning report…";
-    updateControls();
-    const endedAt = new Date().toISOString();
-    const report = await window.XovaConversationAI.createLearningReport(conversation);
-    conversation.endedAt = endedAt;
-    conversation.report = report;
+  if (isGeneratingReport || conversation.endedAt) return;
+  const conversationToAnalyze = conversation;
+  const transcript = conversationToAnalyze.messages
+    .filter((message) => message.role === "user")
+    .map((message) => message.text.trim())
+    .filter(Boolean);
+  if (transcript.length === 0) {
     isEnding = false;
+    voiceStatusText = "No user messages to assess";
+    updateControls();
+    showReportMessage("There are no user messages to assess yet. Share something in the conversation, then end it to create a learning report.");
+    return;
+  }
+
+  try {
+    isGeneratingReport = true;
+    isEnding = true;
+    voiceLoopEnabled = false;
+    window.clearTimeout(voiceRestartTimer);
+    window.XovaVoice.stopAll();
+    voiceStatusText = "Analyzing your conversation…";
+    updateControls();
+    showReportMessage("Analyzing your conversation… Your complete transcript is being checked against Xova’s prototype grammar patterns.");
+    const endedAt = new Date().toISOString();
+    const transcriptMessages = conversationToAnalyze.messages.map((message) => ({ ...message }));
+    const report = await window.XovaConversationAI.createLearningReport({
+      ...conversationToAnalyze,
+      messages: transcriptMessages,
+    });
+    conversationToAnalyze.endedAt = endedAt;
+    conversationToAnalyze.report = report;
+    isEnding = false;
+    isGeneratingReport = false;
     voiceStatusText = "Conversation complete";
     saveConversation();
     renderConversation();
@@ -653,9 +853,11 @@ async function finishConversation() {
     openReport();
   } catch (error) {
     isEnding = false;
+    isGeneratingReport = false;
     console.error("Could not generate the learning report.", error);
     showNotice("The learning report could not be generated. Your conversation is still available.");
     voiceStatusText = "Report generation failed · your conversation is saved";
+    showReportMessage("We couldn’t analyze this conversation just now. Your transcript is saved; please close this message and try ending the conversation again.");
     updateControls();
   }
 }
@@ -711,62 +913,35 @@ function updateVoiceActivity() {
 }
 
 voiceButton.addEventListener("click", () => {
-  if (window.XovaVoice.isListening) {
+  if (window.XovaVoice.isListening || window.XovaVoice.isStarting) {
+    voiceLoopEnabled = false;
     voiceStatusText = "Finishing your sentence…";
-    window.XovaVoice.stopListening();
+    if (window.XovaVoice.isListening) {
+      window.XovaVoice.stopListening();
+    } else {
+      window.XovaVoice.abortListening();
+      voiceStatusText = getVoiceReadyStatus();
+    }
     updateControls();
     return;
   }
 
-  liveTranscript.textContent = "";
-  voiceRecognitionError = false;
-  voiceStatusText = "Requesting microphone access…";
-  updateControls();
-  const started = window.XovaVoice.startListening({
-    onListening: updateVoiceActivity,
-    onInterim: (text) => {
-      liveTranscript.textContent = text ? `Hearing: ${text}` : "";
-    },
-    onTranscript: ({ text, confidence, source }) => {
-      liveTranscript.textContent = `You said: ${text}`;
-      sendMessage(text, { source, confidence });
-    },
-    onRecognitionEnd: () => {
-      if (voiceRecognitionError) {
-        voiceRecognitionError = false;
-        if (!isEnding) return;
-      }
-      if (isEnding && !isThinking) {
-        finishConversation();
-      } else if (!isThinking && !conversation.endedAt) {
-        voiceStatusText = getVoiceReadyStatus();
-        updateControls();
-      }
-    },
-    onError: ({ message }) => {
-      voiceRecognitionError = true;
-      voiceStatusText = message;
-      liveTranscript.textContent = "";
-      updateControls();
-      showNotice(message);
-    },
-  });
-  if (!started && window.XovaVoice.isRecognitionSupported) {
-    voiceStatusText = "Could not start microphone · check browser permissions";
-    updateControls();
-  }
+  voiceLoopEnabled = true;
+  startVoiceListening();
 });
 
 muteVoiceButton.addEventListener("click", () => {
   window.XovaVoice.setMuted(!window.XovaVoice.isMuted);
   voiceStatusText = window.XovaVoice.isMuted ? "Voice muted · replies remain visible" : "Voice playback enabled";
   updateControls();
+  if (window.XovaVoice.isMuted) scheduleVoiceListening();
 });
 
 stopSpeakingButton.addEventListener("click", () => {
   window.XovaVoice.cancelSpeech();
   voiceStatusText = "Playback stopped · transcript remains available";
   updateControls();
+  scheduleVoiceListening();
 });
 
 window.addEventListener("pagehide", () => window.XovaVoice.stopAll());

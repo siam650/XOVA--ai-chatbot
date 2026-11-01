@@ -111,7 +111,7 @@
       return false;
     }
 
-    if (isListening || isStarting) return true;
+    if (recognition || isListening || isStarting) return true;
     cancelSpeech();
     recognition = createRecognition(handlers);
     isStarting = true;

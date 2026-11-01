@@ -1,7 +1,7 @@
 (() => {
   const FRONTEND_REQUEST_TIMEOUT_MS = 120000;
   const LOCAL_HOSTNAMES = ["localhost", "127.0.0.1", "::1"];
-  const LOCAL_API_BASE_URL = "http://localhost:3000/api";
+  const API_BASE_URL = "https://xova-ai-chatbot.onrender.com";
   const isLocalDevelopment = LOCAL_HOSTNAMES.includes(window.location.hostname);
   const modes = {
     "casual-chat": "Casual Chat",

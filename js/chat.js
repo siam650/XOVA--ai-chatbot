@@ -32,9 +32,7 @@ const welcomeCopy = document.querySelector("#welcome-copy");
 const suggestions = [...document.querySelectorAll(".suggestion")];
 
 let conversation;
-let thinkingTimer;
 let isThinking = false;
-let replyIndex = 0;
 let noticeTimer;
 let voiceStatusText = "Voice ready · tap to speak";
 let isEnding = false;
@@ -141,7 +139,7 @@ function updateAddress() {
   const url = new URL(window.location.href);
   url.search = "";
   url.searchParams.set("conversation", conversation.id);
-  const modeKey = Object.entries(window.XovaMockAI.modes)
+  const modeKey = Object.entries(window.XovaConversationAI.modes)
     .find(([, label]) => label === conversation.mode)?.[0]
     ?? (conversation.mode === "Debate" ? "debate" : null);
   if (modeKey) url.searchParams.set("mode", modeKey);
@@ -156,7 +154,6 @@ function selectConversation(nextConversation) {
   isGeneratingReport = false;
   liveTranscript.textContent = "";
   conversation = nextConversation;
-  replyIndex = conversation.messages.filter((message) => message.role === "assistant").length;
   try {
     window.XovaConversationStore.setActiveId(conversation.id);
   } catch (error) {
@@ -204,13 +201,13 @@ function initializeConversation() {
     }
   }
 
-  if (!conversation && requestedMode && window.XovaMockAI.modes[requestedMode]) {
+  if (!conversation && requestedMode && window.XovaConversationAI.modes[requestedMode]) {
     try {
-      conversation = window.XovaConversationStore.create(window.XovaMockAI.modes[requestedMode]);
+      conversation = window.XovaConversationStore.create(window.XovaConversationAI.modes[requestedMode]);
     } catch (error) {
       console.error("Could not create a saved conversation.", error);
       showNotice("Browser storage is unavailable. This conversation is temporary and may be lost.");
-      conversation = makeTemporaryConversation(window.XovaMockAI.modes[requestedMode]);
+      conversation = makeTemporaryConversation(window.XovaConversationAI.modes[requestedMode]);
     }
   }
 
@@ -264,16 +261,16 @@ function createMessageRow(message) {
   bubble.className = "message-bubble";
   bubble.textContent = message.text;
   content.append(author, bubble);
-  if (isUser && message.source === "speech") {
+  if (
+    isUser &&
+    message.source === "speech" &&
+    typeof message.confidence === "number" &&
+    message.confidence < 0.55
+  ) {
     const source = document.createElement("span");
     source.className = "transcript-source";
-    source.textContent =
-      typeof message.confidence === "number" && message.confidence < 0.55
-        ? "Voice transcript · recognition may be uncertain"
-        : "Voice transcript · check wording if it seems inaccurate";
-    if (typeof message.confidence === "number" && message.confidence < 0.55) {
-      source.classList.add("is-uncertain");
-    }
+    source.classList.add("is-uncertain");
+    source.textContent = "Low recognition confidence · check wording";
     content.append(source);
   }
   if (!isUser) row.append(createAvatar());
@@ -302,7 +299,6 @@ function createThinkingRow() {
 }
 
 function renderConversation() {
-  window.clearTimeout(thinkingTimer);
   isThinking = false;
   voiceStatusText = conversation.endedAt ? "Conversation complete" : getVoiceReadyStatus();
   currentMode.textContent = conversation.mode;
@@ -452,6 +448,14 @@ function updateConversationTitle() {
 function sendMessage(text, metadata = {}) {
   const cleanText = text.trim();
   if (!cleanText || isThinking || conversation.endedAt) return;
+  const submittedAt = performance.now();
+  const isLocalDevelopment = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+  if (isLocalDevelopment) {
+    console.debug("[Xova timing] User submitted message", {
+      source: metadata.source ?? "text",
+      timestamp: new Date().toISOString(),
+    });
+  }
 
   if (window.XovaVoice.isListening && metadata.source !== "speech") {
     window.XovaVoice.abortListening();
@@ -476,27 +480,39 @@ function sendMessage(text, metadata = {}) {
   messageList.append(createThinkingRow());
   scrollToLatest();
 
-  thinkingTimer = window.setTimeout(async () => {
-    document.querySelector("#thinking-row")?.remove();
+  (async () => {
     let reply;
     try {
       reply = await window.XovaConversationAI.getReply(
         cleanText,
         conversation.mode,
-        conversation.messages,
-        replyIndex,
+        conversation.messages.slice(-24),
+        {
+          onTiming: (stage, durationMs) => {
+            if (isLocalDevelopment) {
+              console.debug(`[Xova timing] ${stage}`, `${durationMs.toFixed(0)} ms after request start`);
+            }
+          },
+        },
       );
     } catch (error) {
+      document.querySelector("#thinking-row")?.remove();
       console.error("Could not generate Xova's reply.", error);
       isThinking = false;
       voiceStatusText = "Xova could not respond · try again";
-      showNotice("Xova could not generate a reply. Your message is saved; you can send another one.");
+      showNotice(error.message || "Xova could not generate a reply. Your message is saved; you can send another one.");
       updateControls();
       if (isEnding) finishConversation();
       else scheduleVoiceListening();
       return;
     }
-    replyIndex += 1;
+    document.querySelector("#thinking-row")?.remove();
+    if (isLocalDevelopment) {
+      console.debug(
+        "[Xova timing] Frontend received complete reply",
+        `${(performance.now() - submittedAt).toFixed(0)} ms after message submission`,
+      );
+    }
     conversation.messages.push({
       role: "assistant",
       text: reply,
@@ -510,6 +526,12 @@ function sendMessage(text, metadata = {}) {
       updateControls();
       window.XovaVoice.speak(reply, {
         onStart: () => {
+          if (isLocalDevelopment) {
+            console.debug(
+              "[Xova timing] Speech synthesis started",
+              `${(performance.now() - submittedAt).toFixed(0)} ms after message submission`,
+            );
+          }
           voiceStatusText = "Xova is speaking";
           updateControls();
         },
@@ -521,6 +543,7 @@ function sendMessage(text, metadata = {}) {
         onError: () => {
           voiceStatusText = "Voice playback unavailable · read the transcript below";
           updateControls();
+          scheduleVoiceListening();
         },
         onUnavailable: () => {
           voiceStatusText = "Voice playback unsupported · read Xova’s written reply";
@@ -540,7 +563,7 @@ function sendMessage(text, metadata = {}) {
       return;
     }
     if (!mobileLayout.matches) messageInput.focus({ preventScroll: true });
-  }, 850);
+  })();
 }
 
 function setSidebarOpen(isOpen) {
@@ -681,6 +704,7 @@ function renderReport(report) {
     createReportTextSection(
       "What you did well",
       report.strengths ?? ["You completed this practice conversation and kept sharing ideas."],
+      "is-strength",
     ),
   );
   appendReportSection("Top 3 recurring weaknesses / practice priorities", report.priorityAreas ?? [], (area) =>
@@ -690,7 +714,7 @@ function renderReport(report) {
       typeof area.count === "number" ? "Transcript matches" : "",
       typeof area.count === "number" ? String(area.count) : "",
     ),
-  );
+  ).classList.add("is-priority");
   appendReportSection("Voice transcripts to review", report.uncertainTranscripts ?? [], (item) =>
     reportListItem(
       `“${item.text}”`,
@@ -700,7 +724,7 @@ function renderReport(report) {
         ? `${Math.round(item.confidence * 100)}% · a confidence score cannot confirm that every word was transcribed correctly`
         : "Not provided by the browser · verify the transcript against what you said",
     ),
-  );
+  ).classList.add("is-priority");
   const grammarSection = appendReportSection("Grammar to practice", report.grammarMistakes ?? [], (mistake) => {
     const item = reportListItem("Original sentence", mistake.original);
     const corrected = document.createElement("p");
@@ -709,15 +733,19 @@ function renderReport(report) {
     const explanation = document.createElement("p");
     explanation.className = "report-extra";
     explanation.textContent = `Explanation: ${mistake.explanation}`;
-    item.append(corrected, explanation);
+    const tip = document.createElement("p");
+    tip.className = "report-avoid";
+    tip.textContent = `How to avoid it: ${mistake.tip ?? "Review the rule and practice it in a new sentence."}`;
+    item.append(corrected, explanation, tip);
     return item;
   });
+  grammarSection.classList.add("is-grammar");
   (report.grammarMistakes ?? []).forEach((mistake, index) => {
     const item = grammarSection.querySelectorAll("li")[index];
     if (!item) return;
     const rule = document.createElement("p");
     rule.className = "report-rule";
-    rule.textContent = `Grammar rule: ${mistake.rule ?? mistake.category ?? "Example-based pattern"}. How to avoid it: ${mistake.tip ?? "Review the suggested correction and practice a similar sentence."}`;
+    rule.textContent = `Grammar rule: ${mistake.rule ?? mistake.category ?? "Grammar pattern"}.`;
     const example = document.createElement("p");
     example.className = "report-example";
     example.textContent = `Correct example: ${mistake.example ?? mistake.corrected}`;
@@ -735,23 +763,25 @@ function renderReport(report) {
   if (!(report.grammarMistakes ?? []).length) {
     const message = document.createElement("p");
     message.className = "report-empty-note";
-    message.textContent = "The prototype found no matches in its example-based grammar rules. This does not confirm that every sentence is error-free.";
+    message.textContent = "No meaningful grammar mistakes were identified in this conversation. This does not guarantee that every sentence is error-free.";
     reportContent.append(message);
   }
   appendReportSection("More natural expressions", report.naturalSuggestions ?? [], (suggestion) =>
     reportListItem(suggestion.original, `Try: ${suggestion.suggestion}`, "Note", suggestion.note),
-  );
+  ).classList.add("is-improvement");
   appendReportSection("Useful vocabulary", report.usefulVocabulary ?? [], (entry) =>
     reportListItem(entry.word, entry.meaning, "Example", entry.example),
-  );
+  ).classList.add("is-vocabulary");
   const exercises = (report.exercises ?? []).map((exercise, index) =>
     reportListItem(`Exercise ${index + 1}`, exercise.prompt),
   );
-  appendReportSection("Short personalized exercises", exercises, (exercise) => exercise);
+  appendReportSection("Short personalized exercises", exercises, (exercise) => exercise)
+    .classList.add("is-exercise");
   reportContent.append(
     createReportTextSection(
       "What to practice next",
       report.practiceNext ?? ["Keep practicing in short, relaxed conversations."],
+      "is-practice",
     ),
   );
 
@@ -765,20 +795,39 @@ function renderReport(report) {
   reportContent.append(final);
 }
 
-function showReportMessage(message) {
+function showReportMessage(message, state = "info") {
   reportContent.replaceChildren();
   const status = document.createElement("p");
   status.className = "report-summary";
-  status.setAttribute("role", "status");
-  status.setAttribute("aria-live", "polite");
-  status.textContent = message;
+  status.setAttribute("role", state === "error" ? "alert" : "status");
+  status.setAttribute("aria-live", state === "error" ? "assertive" : "polite");
+  status.setAttribute("aria-busy", String(state === "loading"));
+  if (state === "loading") {
+    const indicator = document.createElement("span");
+    indicator.className = "report-loading-indicator";
+    indicator.setAttribute("aria-hidden", "true");
+    status.append(indicator);
+  }
+  status.append(document.createTextNode(message));
   reportContent.append(status);
+  if (state === "error") {
+    const retryButton = document.createElement("button");
+    retryButton.className = "report-retry-button";
+    retryButton.type = "button";
+    retryButton.textContent = "Try assessment again";
+    retryButton.addEventListener("click", () => {
+      reportDialog.close();
+      finishConversation();
+    });
+    reportContent.append(retryButton);
+  }
   if (!reportDialog.open) reportDialog.showModal();
 }
 
-function createReportTextSection(title, items) {
+function createReportTextSection(title, items, variant = "") {
   const section = document.createElement("section");
   section.className = "report-section";
+  if (variant) section.classList.add(variant);
   const heading = document.createElement("h3");
   heading.textContent = title;
   const list = document.createElement("ul");
@@ -835,7 +884,7 @@ async function finishConversation() {
     window.XovaVoice.stopAll();
     voiceStatusText = "Analyzing your conversation…";
     updateControls();
-    showReportMessage("Analyzing your conversation… Your complete transcript is being checked against Xova’s prototype grammar patterns.");
+    showReportMessage("Analyzing your complete conversation with Xova’s AI tutor…", "loading");
     const endedAt = new Date().toISOString();
     const transcriptMessages = conversationToAnalyze.messages.map((message) => ({ ...message }));
     const report = await window.XovaConversationAI.createLearningReport({
@@ -855,9 +904,8 @@ async function finishConversation() {
     isEnding = false;
     isGeneratingReport = false;
     console.error("Could not generate the learning report.", error);
-    showNotice("The learning report could not be generated. Your conversation is still available.");
     voiceStatusText = "Report generation failed · your conversation is saved";
-    showReportMessage("We couldn’t analyze this conversation just now. Your transcript is saved; please close this message and try ending the conversation again.");
+    showReportMessage(`${error.message || "We couldn’t analyze this conversation just now."} Your transcript is saved, so you can retry without losing your conversation.`, "error");
     updateControls();
   }
 }

@@ -5,9 +5,13 @@
     typeof window.speechSynthesis.cancel === "function" &&
     typeof window.SpeechSynthesisUtterance === "function";
 
+  const DEFAULT_END_OF_SPEECH_SILENCE_MS = 2500;
+  const RECOGNITION_RESTART_DELAY_MS = 180;
   let recognition = null;
-  let isStarting = false;
-  let isListening = false;
+  let recognitionStarting = false;
+  let recognitionActive = false;
+  let voiceSession = null;
+  let endOfSpeechSilenceMs = DEFAULT_END_OF_SPEECH_SILENCE_MS;
   let isMuted = false;
   let isSpeaking = false;
 
@@ -15,78 +19,246 @@
     handlers[name]?.(value);
   }
 
-  function createRecognition(handlers) {
-    if (!Recognition) return null;
+  function getFinalTranscript(session) {
+    return session.finalResults.map((result) => result.text).filter(Boolean).join(" ").trim();
+  }
 
-    const instance = new Recognition();
-    let finalTranscript = "";
-    let confidence = null;
-    let hasStarted = false;
-    let discardTranscript = false;
-    const isCurrent = () => recognition === instance;
-    instance.discardTranscript = () => {
-      discardTranscript = true;
-    };
+  function getFinalConfidence(session) {
+    const scores = session.finalResults
+      .map((result) => result.confidence)
+      .filter(Number.isFinite);
+    return scores.length ? Math.min(...scores) : null;
+  }
+
+  function getVisibleTranscript(session, recognitionState = session.currentState) {
+    const finalized = session.segments.map((segment) => segment.text);
+    const currentFinal = recognitionState ? getFinalTranscript(recognitionState) : "";
+    const interim = recognitionState?.interimTranscript ?? "";
+    const parts = [...finalized, currentFinal, interim].filter(Boolean);
+    return parts.join(" ").replace(/\s+/g, " ").trim();
+  }
+
+  function clearSilenceTimer(session) {
+    window.clearTimeout(session.silenceTimer);
+    session.silenceTimer = null;
+  }
+
+  function scheduleSilenceCompletion(session) {
+    const currentFinal = session.currentState
+      ? getFinalTranscript(session.currentState)
+      : "";
+    if (
+      voiceSession !== session ||
+      session.finishRequested ||
+      (!session.segments.length && !currentFinal)
+    ) {
+      return;
+    }
+
+    clearSilenceTimer(session);
+    session.silenceTimer = window.setTimeout(() => {
+      session.finishRequested = true;
+      window.clearTimeout(session.restartTimer);
+      if (session.current && (recognitionActive || recognitionStarting)) {
+        stopRecognition(session, "Could not finish speech recognition after a pause.");
+      } else {
+        completeVoiceSession(session);
+      }
+    }, endOfSpeechSilenceMs);
+  }
+
+  function commitRecognitionResults(session, recognitionState) {
+    if (recognitionState.committed) return;
+    recognitionState.committed = true;
+    const text = getFinalTranscript(recognitionState);
+    if (!text) return;
+    session.segments.push({ text, confidence: getFinalConfidence(recognitionState) });
+  }
+
+  function stopRecognition(session, reason) {
+    const instance = session.current;
+    if (!instance) {
+      completeVoiceSession(session);
+      return;
+    }
+
+    try {
+      instance.stop();
+      return;
+    } catch (error) {
+      console.error(reason, error);
+    }
+
+    try {
+      instance.abort();
+      return;
+    } catch (error) {
+      console.error("Could not abort speech recognition.", error);
+    }
+
+    if (session.current === instance) {
+      if (session.currentState) {
+        commitRecognitionResults(session, session.currentState);
+      }
+      session.current = null;
+      session.currentState = null;
+      recognition = null;
+      recognitionStarting = false;
+      recognitionActive = false;
+      completeVoiceSession(session);
+    }
+  }
+
+  function completeVoiceSession(session) {
+    if (voiceSession !== session || session.completed) return;
+    session.completed = true;
+    clearSilenceTimer(session);
+    window.clearTimeout(session.restartTimer);
+    const text = session.segments.map((segment) => segment.text).join(" ").replace(/\s+/g, " ").trim();
+    const scores = session.segments
+      .map((segment) => segment.confidence)
+      .filter(Number.isFinite);
+    const confidence = scores.length ? Math.min(...scores) : null;
+    voiceSession = null;
+    recognition = null;
+    recognitionStarting = false;
+    recognitionActive = false;
+    session.current = null;
+    session.currentState = null;
+    notify(session.handlers, "onListening", false);
+    notify(session.handlers, "onInterim", "");
+    if (text) notify(session.handlers, "onTranscript", { text, confidence, source: "speech" });
+    notify(session.handlers, "onRecognitionEnd");
+  }
+
+  function startRecognition(session) {
+    if (
+      voiceSession !== session ||
+      session.completed ||
+      session.finishRequested ||
+      session.current ||
+      recognitionStarting ||
+      recognitionActive
+    ) {
+      return;
+    }
+
+    let instance;
+    let recognitionState;
+    try {
+      instance = new Recognition();
+      recognitionState = {
+        finalResults: [],
+        interimTranscript: "",
+        committed: false,
+      };
+    } catch (error) {
+      session.finishRequested = true;
+      notify(session.handlers, "onError", {
+        code: "unknown",
+        message: errorMessage("unknown"),
+      });
+      completeVoiceSession(session);
+      console.error("Could not create speech recognition.", error);
+      return;
+    }
+
+    session.current = instance;
+    session.currentState = recognitionState;
+    recognition = instance;
+    recognitionStarting = true;
     instance.lang = "en-US";
     instance.interimResults = true;
     instance.continuous = false;
     instance.maxAlternatives = 1;
 
+    const isCurrent = () =>
+      voiceSession === session && session.current === instance && !session.completed;
+
     instance.onstart = () => {
       if (!isCurrent()) return;
-      isStarting = false;
-      hasStarted = true;
-      isListening = true;
-      notify(handlers, "onListening", true);
+      recognitionStarting = false;
+      recognitionActive = true;
+      notify(session.handlers, "onListening", true);
+    };
+
+    instance.onspeechstart = () => {
+      if (!isCurrent()) return;
+      clearSilenceTimer(session);
+    };
+
+    instance.onspeechend = () => {
+      if (!isCurrent()) return;
+      scheduleSilenceCompletion(session);
     };
 
     instance.onresult = (event) => {
-      if (!isCurrent() || discardTranscript) return;
-      let interim = "";
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+      if (!isCurrent()) return;
+      recognitionState.finalResults = [];
+      recognitionState.interimTranscript = "";
+      for (let index = 0; index < event.results.length; index += 1) {
         const result = event.results[index];
         const alternative = result[0];
-        if (result.isFinal && alternative.transcript.trim()) {
-          finalTranscript = `${finalTranscript} ${alternative.transcript.trim()}`.trim();
-          if (Number.isFinite(alternative.confidence)) {
-            confidence = confidence === null
-              ? alternative.confidence
-              : Math.min(confidence, alternative.confidence);
-          }
+        const text = alternative.transcript.trim();
+        if (!text) continue;
+        if (result.isFinal) {
+          recognitionState.finalResults.push({
+            text,
+            confidence: Number.isFinite(alternative.confidence) ? alternative.confidence : null,
+          });
         } else {
-          interim += alternative.transcript;
+          recognitionState.interimTranscript += `${recognitionState.interimTranscript ? " " : ""}${text}`;
         }
       }
-      notify(handlers, "onInterim", `${finalTranscript} ${interim.trim()}`.trim());
+
+      if (recognitionState.interimTranscript) clearSilenceTimer(session);
+      else if (getFinalTranscript(recognitionState)) scheduleSilenceCompletion(session);
+      notify(session.handlers, "onInterim", getVisibleTranscript(session));
     };
 
     instance.onerror = (event) => {
-      if (!isCurrent() || discardTranscript) return;
-      isStarting = false;
-      isListening = false;
-      const error = event.error || "unknown";
-      notify(handlers, "onError", { code: error, message: errorMessage(error) });
-      notify(handlers, "onListening", false);
+      if (!isCurrent()) return;
+      const code = event.error || "unknown";
+      if (code === "aborted" && session.finishRequested) return;
+      notify(session.handlers, "onError", { code, message: errorMessage(code) });
+      if (code !== "no-speech") session.finishRequested = true;
     };
 
     instance.onend = () => {
       if (!isCurrent()) return;
-      isStarting = false;
-      isListening = false;
+      commitRecognitionResults(session, recognitionState);
+      session.current = null;
+      session.currentState = null;
       recognition = null;
-      if (!discardTranscript) {
-        notify(handlers, "onListening", false);
-        if (hasStarted) {
-          notify(handlers, "onInterim", "");
-          if (finalTranscript) {
-            notify(handlers, "onTranscript", { text: finalTranscript, confidence, source: "speech" });
-          }
-          notify(handlers, "onRecognitionEnd");
-        }
+      recognitionStarting = false;
+      recognitionActive = false;
+      notify(session.handlers, "onListening", false);
+      notify(session.handlers, "onInterim", getVisibleTranscript(session));
+
+      if (session.finishRequested) {
+        completeVoiceSession(session);
+        return;
       }
+      if (session.segments.length && !session.silenceTimer) scheduleSilenceCompletion(session);
+      session.restartTimer = window.setTimeout(
+        () => startRecognition(session),
+        RECOGNITION_RESTART_DELAY_MS,
+      );
     };
 
-    return instance;
+    try {
+      instance.start();
+    } catch (error) {
+      session.current = null;
+      session.currentState = null;
+      recognition = null;
+      recognitionStarting = false;
+      recognitionActive = false;
+      session.finishRequested = true;
+      const code = error.name === "NotAllowedError" ? "not-allowed" : "unknown";
+      notify(session.handlers, "onError", { code, message: errorMessage(code) });
+      completeVoiceSession(session);
+    }
   }
 
   function errorMessage(code) {
@@ -111,42 +283,66 @@
       return false;
     }
 
-    if (recognition || isListening || isStarting) return true;
+    if (voiceSession) return true;
     cancelSpeech();
-    recognition = createRecognition(handlers);
-    isStarting = true;
-
-    try {
-      recognition.start();
-      return true;
-    } catch (error) {
-      isStarting = false;
-      const code = error.name === "NotAllowedError" ? "not-allowed" : "unknown";
-      recognition = null;
-      notify(handlers, "onError", { code, message: errorMessage(code) });
-      return false;
-    }
+    voiceSession = {
+      handlers,
+      segments: [],
+      current: null,
+      currentState: null,
+      silenceTimer: null,
+      restartTimer: null,
+      finishRequested: false,
+      completed: false,
+    };
+    startRecognition(voiceSession);
+    return Boolean(voiceSession);
   }
 
   function stopListening() {
-    if (!recognition || !isListening) return;
-    try {
-      recognition.stop();
-    } catch (error) {
-      console.error("Could not stop speech recognition.", error);
-      abortListening();
+    if (!voiceSession) return;
+    voiceSession.finishRequested = true;
+    clearSilenceTimer(voiceSession);
+    window.clearTimeout(voiceSession.restartTimer);
+    if (!voiceSession.current) {
+      completeVoiceSession(voiceSession);
+      return;
     }
+    stopRecognition(voiceSession, "Could not stop speech recognition.");
   }
 
   function abortListening() {
-    if (!recognition) return;
-    recognition.discardTranscript?.();
-    isStarting = false;
-    isListening = false;
+    if (!voiceSession) return;
+    const session = voiceSession;
+    session.completed = true;
+    clearSilenceTimer(session);
+    window.clearTimeout(session.restartTimer);
+    voiceSession = null;
+    recognitionStarting = false;
+    recognitionActive = false;
+    const instance = session.current;
+    session.current = null;
+    session.currentState = null;
+    recognition = null;
     try {
-      recognition.abort();
+      instance?.abort();
     } catch (error) {
       console.error("Could not cancel speech recognition.", error);
+    }
+    notify(session.handlers, "onInterim", "");
+    notify(session.handlers, "onListening", false);
+  }
+
+  function setEndOfSpeechSilenceThreshold(milliseconds) {
+    if (!Number.isFinite(milliseconds) || milliseconds < 500 || milliseconds > 10000) {
+      throw new RangeError("Speech silence threshold must be between 500 and 10000 milliseconds.");
+    }
+    endOfSpeechSilenceMs = milliseconds;
+    if (
+      voiceSession &&
+      (voiceSession.segments.length || getFinalTranscript(voiceSession.currentState ?? { finalResults: [] }))
+    ) {
+      scheduleSilenceCompletion(voiceSession);
     }
   }
 
@@ -205,7 +401,6 @@
   }
 
   function stopAll() {
-    isStarting = false;
     abortListening();
     cancelSpeech();
   }
@@ -220,11 +415,15 @@
     cancelSpeech,
     setMuted,
     stopAll,
+    setEndOfSpeechSilenceThreshold,
+    get endOfSpeechSilenceThreshold() {
+      return endOfSpeechSilenceMs;
+    },
     get isListening() {
-      return isListening;
+      return Boolean(voiceSession);
     },
     get isStarting() {
-      return isStarting;
+      return recognitionStarting;
     },
     get isSpeaking() {
       return isSpeaking;

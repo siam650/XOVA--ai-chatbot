@@ -19,7 +19,9 @@ body {
   margin: 0;
   overflow-x: hidden;
   background:
-    radial-gradient(ellipse at 50% 12%, rgba(var(--dusty-blue-rgb), 0.075), transparent 34rem),
+    radial-gradient(ellipse at 50% 12%, rgba(var(--dusty-blue-rgb), 0.14), transparent 34rem),
+    radial-gradient(ellipse at 92% 38%, rgba(var(--cyan-rgb), 0.055), transparent 32rem),
+    radial-gradient(ellipse at 5% 78%, rgba(var(--soft-rose-rgb), 0.025), transparent 30rem),
     var(--background);
 }
 
@@ -242,7 +244,10 @@ p {
 }
 
 .gradient-text {
-  color: var(--accent-light);
+  background: linear-gradient(105deg, var(--accent-light) 5%, var(--cyan) 55%, var(--electric-blue) 100%);
+  background-clip: text;
+  color: transparent;
+  -webkit-background-clip: text;
 }
 
 .hero-description {
@@ -272,7 +277,7 @@ p {
 }
 
 .button-primary {
-  background: var(--accent);
+  background: linear-gradient(110deg, #927dff 0%, #687ff6 54%, #4da8ec 100%);
   box-shadow: 0 8px 24px rgba(var(--dusty-blue-rgb), 0.2);
 }
 
@@ -287,8 +292,8 @@ p {
 }
 
 .button-primary:hover {
-  background: var(--accent-light);
-  box-shadow: 0 11px 28px rgba(var(--dusty-blue-rgb), 0.24);
+  box-shadow: 0 11px 28px rgba(var(--dusty-blue-rgb), 0.3);
+  filter: brightness(1.08);
   transform: translateY(-3px);
 }
 
@@ -344,7 +349,7 @@ p {
   left: 50%;
   width: 480px;
   height: 390px;
-  background: radial-gradient(ellipse, rgba(var(--dusty-blue-rgb), 0.13), transparent 68%);
+  background: radial-gradient(ellipse, rgba(var(--dusty-blue-rgb), 0.19), transparent 68%);
   transform: translateX(-50%);
 }
 
@@ -353,7 +358,7 @@ p {
   bottom: 11%;
   width: 220px;
   height: 220px;
-  background: radial-gradient(circle, rgba(var(--soft-rose-rgb), 0.07), transparent 70%);
+  background: radial-gradient(circle, rgba(var(--cyan-rgb), 0.09), transparent 70%);
 }
 
 .hero-orbit {
@@ -395,6 +400,7 @@ p {
 .spark-two {
   right: 10%;
   bottom: 27%;
+  color: var(--soft-rose);
   font-size: 23px;
   opacity: 0.48;
 }
@@ -421,6 +427,9 @@ p {
   padding-top: 102px;
   padding-bottom: 119px;
   border-top: 1px solid rgba(255, 255, 255, 0.055);
+  background:
+    radial-gradient(ellipse at 12% 0%, rgba(var(--dusty-blue-rgb), 0.055), transparent 34rem),
+    linear-gradient(180deg, rgba(var(--electric-blue-rgb), 0.035), transparent 72%);
 }
 
 .section-heading {
@@ -478,7 +487,7 @@ p {
 }
 
 .practice-card:hover {
-  border-color: rgba(var(--dusty-blue-rgb), 0.52);
+  border-color: rgba(var(--dusty-blue-rgb), 0.58);
   background: var(--elevated);
   box-shadow: 0 13px 34px rgba(0, 0, 0, 0.2);
   transform: translateY(-4px);
@@ -517,11 +526,11 @@ p {
 }
 
 .icon-mint {
-  color: var(--olive-text);
+  color: var(--cyan);
 }
 
 .icon-blue {
-  color: var(--accent-light);
+  color: var(--electric-blue);
 }
 
 .card-copy {
@@ -563,6 +572,9 @@ p {
 .journey-section {
   padding: 94px 0 111px;
   border-top: 1px solid rgba(255, 255, 255, 0.055);
+  background:
+    radial-gradient(ellipse at 90% 15%, rgba(var(--cyan-rgb), 0.035), transparent 32rem),
+    linear-gradient(180deg, rgba(var(--dusty-blue-rgb), 0.025), transparent 65%);
 }
 
 .journey-section .section-heading {
@@ -653,7 +665,10 @@ p {
   padding: 59px 24px;
   border: 1px solid rgba(var(--dusty-blue-rgb), 0.16);
   border-radius: 22px;
-  background: var(--surface);
+  background:
+    radial-gradient(ellipse at 16% 100%, rgba(var(--cyan-rgb), 0.09), transparent 52%),
+    radial-gradient(ellipse at 88% 0%, rgba(var(--dusty-blue-rgb), 0.12), transparent 50%),
+    var(--surface);
   text-align: center;
 }
 

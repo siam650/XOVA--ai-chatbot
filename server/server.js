@@ -4,7 +4,9 @@ const path = require("node:path");
 const { performance } = require("node:perf_hooks");
 
 require("dotenv").config({ path: path.join(__dirname, ".env") });
-const isDevelopment = process.env.NODE_ENV !== "production";
+const isDevelopment =
+  process.env.NODE_ENV === "development" ||
+  (!process.env.NODE_ENV && process.env.RENDER !== "true");
 
 const { generateChatReply, generateAssessment } = require("./gemini");
 
@@ -155,32 +157,23 @@ app.post("/api/assessment", async (req, res) => {
 });
 
 function handleAiError(res, error, operation) {
-  if (error?.code === "AI_NOT_CONFIGURED") {
-    return res.status(503).json({
-      error: "The AI service is not configured. Add GEMINI_API_KEY to server/.env.",
-      code: "AI_NOT_CONFIGURED",
-      retryable: false,
-    });
-  }
-
-  const providerStatus = Number.isInteger(error?.status)
-    ? error.status
-    : Number.isInteger(error?.statusCode)
-      ? error.statusCode
-      : null;
-  const providerMessage = typeof error?.message === "string" ? error.message : "";
+  const providerDetails = getProviderErrorDetails(error);
+  const { providerStatus, providerCode, providerMessage } = providerDetails;
   let failure;
 
-  if (
-    error?.code === "AI_CONFIGURATION_ERROR" ||
-    [401, 403, 404].includes(providerStatus) ||
-    /API_KEY_(INVALID|SERVICE_BLOCKED)|invalid API key|API key (?:is )?(?:invalid|not valid|expired)/i.test(providerMessage)
-  ) {
+  if (error?.code === "AI_NOT_CONFIGURED") {
+    failure = {
+      status: 503,
+      code: "AI_NOT_CONFIGURED",
+      retryable: false,
+      error: "The AI service is not configured. Add GEMINI_API_KEY to the backend environment.",
+    };
+  } else if (error?.code === "AI_CONFIGURATION_ERROR") {
     failure = {
       status: 503,
       code: "AI_CONFIGURATION_ERROR",
       retryable: false,
-      error: "The AI service is misconfigured. Check the backend Gemini API key and model settings.",
+      error: "The AI service configuration is invalid. Check the backend timeout and model settings.",
     };
   } else if (providerStatus === 429) {
     failure = {
@@ -201,12 +194,33 @@ function handleAiError(res, error, operation) {
       retryable: true,
       error: "The AI service took too long to respond. Please try again.",
     };
-  } else if (providerStatus === 503) {
+  } else if ([401, 403].includes(providerStatus)) {
     failure = {
-      status: 503,
-      code: "AI_UNAVAILABLE",
+      status: 502,
+      code: "AI_AUTHENTICATION_ERROR",
+      retryable: false,
+      error: "The AI provider rejected the backend credentials or permissions. Please try again later.",
+    };
+  } else if (providerStatus === 404) {
+    failure = {
+      status: 502,
+      code: "AI_MODEL_UNAVAILABLE",
+      retryable: false,
+      error: "The configured AI model is unavailable. Please check the backend model setting.",
+    };
+  } else if (providerStatus === 400) {
+    failure = {
+      status: 400,
+      code: "AI_REQUEST_REJECTED",
+      retryable: false,
+      error: "The AI provider rejected this request. Please check the request and model configuration.",
+    };
+  } else if ([500, 502, 503].includes(providerStatus)) {
+    failure = {
+      status: providerStatus,
+      code: "AI_UPSTREAM_ERROR",
       retryable: true,
-      error: "The AI service is temporarily unavailable. Please try again shortly.",
+      error: "The AI provider is temporarily unavailable. Please try again shortly.",
     };
   } else if (providerStatus !== null && providerStatus >= 500) {
     failure = {
@@ -215,31 +229,92 @@ function handleAiError(res, error, operation) {
       retryable: true,
       error: "The AI provider could not complete this request. Please try again shortly.",
     };
-  } else if (providerStatus === 400) {
+  } else if (["TypeError", "FetchError", "ConnectTimeoutError"].includes(error?.name)) {
     failure = {
-      status: 502,
-      code: "AI_REQUEST_REJECTED",
-      retryable: false,
-      error: "The AI provider rejected this request. Check the backend model configuration.",
+      status: 503,
+      code: "AI_NETWORK_ERROR",
+      retryable: true,
+      error: "The server could not connect to the AI provider. Please try again shortly.",
     };
   } else {
     failure = {
-      status: 503,
-      code: "AI_UNAVAILABLE",
-      retryable: true,
-      error: "The AI service could not be reached. Please try again shortly.",
+      status: 500,
+      code: "AI_INTERNAL_ERROR",
+      retryable: false,
+      error: "Xova could not complete this AI request. Please try again, and contact support if it continues.",
     };
   }
 
-  console.error(
-    `${operation} failed (${failure.code}${providerStatus === null ? "" : `, provider status ${providerStatus}`}).`,
-  );
+  if (isDevelopment) {
+    console.error("[Xova diagnostics] AI request failed", {
+      operation,
+      errorName: typeof error?.name === "string" ? error.name : "Error",
+      errorMessage: providerMessage || "No provider message available.",
+      providerStatus,
+      providerCode,
+      model: process.env.GEMINI_MODEL || "gemini-3.1-flash-lite",
+    });
+  } else {
+    console.error(
+      `${operation} failed (${failure.code}${providerStatus === null ? "" : `, provider status ${providerStatus}`}).`,
+    );
+  }
   return res.status(failure.status).json({
     error: failure.error,
     code: failure.code,
     retryable: failure.retryable,
+    ...(providerStatus === null ? {} : { providerStatus }),
   });
 }
+
+function getProviderErrorDetails(error) {
+  let providerStatus = Number.isInteger(error?.status)
+    ? error.status
+    : Number.isInteger(error?.statusCode)
+      ? error.statusCode
+      : null;
+  let providerCode =
+    typeof error?.code === "string" && !error.code.startsWith("AI_")
+      ? error.code
+      : null;
+  let providerMessage = typeof error?.message === "string" ? error.message : "";
+
+  try {
+    const parsed = JSON.parse(providerMessage);
+    const details = parsed?.error;
+    if (details && typeof details === "object") {
+      if (providerStatus === null && Number.isInteger(details.code)) {
+        providerStatus = details.code;
+      }
+      if (typeof details.status === "string") {
+        providerCode = details.status;
+      } else if (typeof details.code === "string") {
+        providerCode = details.code;
+      }
+      if (typeof details.message === "string") {
+        providerMessage = details.message;
+      }
+    }
+  } catch {
+    // SDK messages are not always JSON.
+  }
+
+  providerMessage = providerMessage
+    .replace(/AIza[0-9A-Za-z_-]{20,}/g, "[REDACTED]")
+    .replace(/Bearer\s+\S+/gi, "Bearer [REDACTED]")
+    .replace(/([?&](?:key|token|access_token)=)[^&\s]+/gi, "$1[REDACTED]")
+    .replace(/((?:api[_-]?key|authorization|access[_-]?token)\s*[:=]\s*)["']?[^"',\s}]+/gi, "$1[REDACTED]");
+
+  return { providerStatus, providerCode, providerMessage };
+}
+
+app.use((req, res) => {
+  res.status(404).json({
+    error: "The requested API endpoint was not found.",
+    code: "NOT_FOUND",
+    retryable: false,
+  });
+});
 
 app.use((error, req, res, next) => {
   if (error?.type === "entity.parse.failed") {

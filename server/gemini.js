@@ -148,7 +148,7 @@ async function generateChatReply({ message, mode, context, onTiming }) {
     model: process.env.GEMINI_MODEL || "gemini-3.1-flash-lite",
     contents: toGeminiContents([...history, { role: "user", text: message }]),
     config: {
-      systemInstruction: MODE_INSTRUCTIONS[mode],
+      systemInstruction: modeInstructions[mode],
       temperature: 0.8,
       maxOutputTokens: 250,
     },

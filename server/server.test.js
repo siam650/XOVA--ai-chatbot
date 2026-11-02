@@ -287,6 +287,7 @@ test("chat and assessment rate limits return structured 429 responses", async ()
     services,
     async (baseUrl) => {
       const chatBody = { message: "Hello", mode: "Casual Chat" };
+      assert.equal((await fetch(`${baseUrl}/api/chat`)).status, 404);
       assert.equal((await jsonRequest(`${baseUrl}/api/chat`, chatBody)).status, 200);
       assert.equal((await jsonRequest(`${baseUrl}/api/chat`, chatBody)).status, 200);
       const limitedChat = await jsonRequest(`${baseUrl}/api/chat`, chatBody);

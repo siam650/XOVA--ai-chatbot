@@ -180,6 +180,16 @@ function createApp(services = {}) {
     0,
     10,
   );
+  const chatRateLimiter = createRateLimiter(
+    rateLimitWindowMs,
+    chatRateLimit,
+    "Too many chat requests. Please wait before trying again.",
+  );
+  const assessmentRateLimiter = createRateLimiter(
+    rateLimitWindowMs,
+    assessmentRateLimit,
+    "Too many assessment requests. Please wait before trying again.",
+  );
   const app = express();
 
   app.set("trust proxy", trustProxyHops);
@@ -191,16 +201,6 @@ function createApp(services = {}) {
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type"],
   }));
-  app.use("/api/chat", createRateLimiter(
-    rateLimitWindowMs,
-    chatRateLimit,
-    "Too many chat requests. Please wait before trying again.",
-  ));
-  app.use("/api/assessment", createRateLimiter(
-    rateLimitWindowMs,
-    assessmentRateLimit,
-    "Too many assessment requests. Please wait before trying again.",
-  ));
   app.use(express.json({ limit: "256kb" }));
 
   app.get("/", (_req, res) => {
@@ -211,7 +211,7 @@ function createApp(services = {}) {
     res.json({ status: "ok" });
   });
 
-  app.post("/api/chat", async (req, res) => {
+  app.post("/api/chat", chatRateLimiter, async (req, res) => {
     const requestReceivedAt = performance.now();
     if (isDevelopment) console.info("[Xova timing] Backend received chat request");
     const body = req.body;
@@ -259,7 +259,7 @@ function createApp(services = {}) {
     }
   });
 
-  app.post("/api/assessment", async (req, res) => {
+  app.post("/api/assessment", assessmentRateLimiter, async (req, res) => {
     const body = req.body;
     if (!isRecord(body)) {
       return sendValidationError(res, "Request body must be a JSON object.");

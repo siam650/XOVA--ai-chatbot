@@ -51,23 +51,21 @@ const VERTEX_SHADER = /* glsl */ `
     vOpacity = uOpacity;
 
     // --- Orbital movement ---
-    // Each particle drifts slowly along its orbit
-    float orbitAngle = uTime * aOrbitSpeed * 0.15 + aPhase;
-    float r = length(position.xz);
-
     // Differential rotation: inner particles orbit faster (galaxy-like)
-    float diffRotation = uGlobalRotation * (1.0 + (1.0 - aLayerDepth) * 0.6);
+    float diffRotation =
+      uGlobalRotation * (1.0 + (1.0 - aLayerDepth) * 0.6) +
+      uTime * aOrbitSpeed * 0.012;
 
-    // Apply world-space rotation on XZ plane
+    // Keep the galaxy face-on to the camera, which looks down the Z axis.
     vec3 pos = position;
-    pos.xz = rotate2D(diffRotation) * pos.xz;
+    pos.xy = rotate2D(diffRotation) * pos.xy;
 
     // Gentle radial breathing
     float breathe = sin(uTime * 0.22 + aPhase) * 0.04 * (1.0 - aLayerDepth * 0.5);
     pos *= 1.0 + breathe;
 
-    // Subtle vertical oscillation
-    pos.y += sin(uTime * 0.31 + aPhase * 2.1) * 0.06 * aLayerDepth;
+    // Subtle depth oscillation
+    pos.z += sin(uTime * 0.31 + aPhase * 2.1) * 0.06 * aLayerDepth;
 
     // Mouse parallax — outer particles react more
     float parallaxStrength = aLayerDepth * 0.18;
@@ -87,8 +85,9 @@ const VERTEX_SHADER = /* glsl */ `
 
     // Brightness: inner core brighter, modulated by pulsing
     float pulse = 0.82 + 0.18 * sin(uTime * 1.3 + aPhase * 3.7);
-    float depthBrightness = 1.0 - aLayerDepth * 0.55;
-    vBrightness = pulse * depthBrightness;
+    float radialFade = 1.0 - smoothstep(0.35, 1.0, aLayerDepth) * 0.5;
+    float depthBrightness = 1.0 - aLayerDepth * 0.28;
+    vBrightness = pulse * depthBrightness * radialFade;
   }
 `;
 
@@ -124,44 +123,42 @@ const FRAGMENT_SHADER = /* glsl */ `
 // ── Color palette ─────────────────────────────────────────────────
 
 const PALETTE = [
-  // Icy white / near-white (dominant)
-  new THREE.Color(0xf0f8ff),
-  new THREE.Color(0xe8f4ff),
-  new THREE.Color(0xddeeff),
-  // Electric blue
-  new THREE.Color(0x70b5ff),
-  new THREE.Color(0x5aa8ff),
-  new THREE.Color(0x4d9eff),
-  // Soft cyan
+  new THREE.Color(0xf2fbff),
+  new THREE.Color(0xc8efff),
   new THREE.Color(0x72deef),
-  new THREE.Color(0x5ed5e8),
-  new THREE.Color(0x8aeaf7),
-  // Violet / lavender
-  new THREE.Color(0x9a87ff),
-  new THREE.Color(0xb5aaff),
-  new THREE.Color(0xc5baff),
-  // Warm golden (rare — < 5% of particles)
-  new THREE.Color(0xffd580),
-  new THREE.Color(0xffe0a0),
+  new THREE.Color(0x70b5ff),
+  new THREE.Color(0x4d8fff),
+  new THREE.Color(0x8275ff),
+  new THREE.Color(0xa08aff),
+  new THREE.Color(0xb75cff),
+  new THREE.Color(0xdc63ed),
+  new THREE.Color(0xf08bd5),
+  new THREE.Color(0xffc0e8),
 ];
+const CORE_HIGHLIGHT_COLOR = new THREE.Color(0xffffff);
 
-// Weighted selection: icy white & blue get more particles
-const COLOR_WEIGHTS = [
-  18, 15, 12,   // whites
-  16, 14, 12,   // blues
-  14, 11, 9,    // cyans
-  8,  6,  4,    // violets
-  1,  1,        // golds (rare)
-];
-
-function weightedColorIndex() {
-  const totalWeight = COLOR_WEIGHTS.reduce((a, b) => a + b, 0);
-  let rnd = Math.random() * totalWeight;
-  for (let i = 0; i < COLOR_WEIGHTS.length; i++) {
-    rnd -= COLOR_WEIGHTS[i];
-    if (rnd <= 0) return i;
+function galaxyColorIndex(layerDepth, isCore) {
+  const roll = Math.random();
+  if (isCore || layerDepth < 0.18) {
+    if (roll < 0.35) return 0;
+    if (roll < 0.62) return 1;
+    if (roll < 0.84) return 2;
+    return 3;
   }
-  return 0;
+  if (layerDepth < 0.62) {
+    if (roll < 0.12) return 2;
+    if (roll < 0.42) return 3;
+    if (roll < 0.62) return 4;
+    if (roll < 0.84) return 5;
+    return 6;
+  }
+  if (roll < 0.1) return 3;
+  if (roll < 0.2) return 4;
+  if (roll < 0.38) return 5;
+  if (roll < 0.53) return 6;
+  if (roll < 0.7) return 7;
+  if (roll < 0.88) return 8;
+  return roll < 0.97 ? 9 : 10;
 }
 
 // ── Particle distribution functions ──────────────────────────────
@@ -173,33 +170,39 @@ function spiralGalaxyPosition(index, count, params) {
   const arm = index % arms;
   const armAngle = (arm / arms) * Math.PI * 2;
 
-  // Position along arm length (inner-concentrated)
-  const t = Math.pow(Math.random(), 0.7);  // bias toward center
+  // Fill the broad lanes between the four bright arms with softer spiral dust.
+  const isInterArmDust = Math.random() < 0.14;
+  const t = Math.pow(Math.random(), 0.82);
   const r = t * radius;
 
-  // Spiral angle increases with radius
-  const angle = armAngle + r * twist + (Math.random() - 0.5) * 0.6;
+  const armWidth = 0.2 + t * 0.14;
+  const laneOffset = isInterArmDust
+    ? (Math.random() - 0.5) * (Math.PI / arms) * 1.4
+    : (Math.random() - 0.5) * armWidth;
+  const angle = armAngle + r * twist + laneOffset;
+  const radialOffset = (Math.random() - 0.5) * (0.07 + t * 0.09);
+  const armRadius = Math.max(0, r + radialOffset);
 
-  // XZ position on the spiral plane
-  const x = Math.cos(angle) * r;
-  const z = Math.sin(angle) * r;
+  // XY position on the spiral plane; Z supplies the depth variation.
+  const x = Math.cos(angle) * armRadius;
+  const y = Math.sin(angle) * armRadius;
 
-  // Vertical spread (thinner at edges, thicker at center)
-  const ySpread = thickness * (1.0 - t * 0.6) * (0.5 - Math.random());
+  // Depth spread (thinner at edges, thicker at center)
+  const zSpread = thickness * (0.72 - t * 0.48) * (0.5 - Math.random());
 
-  // Scatter some particles off the arms for a realistic diffuse halo
-  const scatter = Math.random() < 0.22;
+  // A sparse outer halo adds depth without obscuring the spiral arms.
+  const scatter = Math.random() < 0.015;
   if (scatter) {
-    const sr = Math.random() * radius * 0.85;
+    const sr = radius * (0.78 + Math.random() * 0.3);
     const sa = Math.random() * Math.PI * 2;
     return new THREE.Vector3(
       Math.cos(sa) * sr,
-      (Math.random() - 0.5) * thickness * 0.8,
-      Math.sin(sa) * sr
+      Math.sin(sa) * sr,
+      (Math.random() - 0.5) * thickness * 0.8
     );
   }
 
-  return new THREE.Vector3(x, ySpread, z);
+  return new THREE.Vector3(x, y, zSpread);
 }
 
 function coreParticlePosition(radius) {
@@ -224,14 +227,14 @@ function create(scene, options = {}) {
   } = options;
 
   const arms = 4;
-  const coreCount = Math.floor(count * 0.12);  // 12% dense core
+  const coreCount = Math.floor(count * 0.12);
   const haloCount = count - coreCount;
 
   const spiralParams = {
     arms,
     radius: radius * spread,
-    thickness: 0.38 * spread,
-    twist: 2.6,
+    thickness: 0.3 * spread,
+    twist: 3.15,
   };
 
   // Typed arrays for BufferGeometry attributes
@@ -254,12 +257,15 @@ function create(scene, options = {}) {
     if (isCore) {
       pos = coreParticlePosition(radius * 0.28);
       layerDepth = Math.random() * 0.3;
-      baseSize = 0.006 + Math.random() * 0.018;
+      baseSize = 0.016 + Math.random() * 0.03;
+      if (Math.random() < 0.025) baseSize += 0.018;
     } else {
       pos = spiralGalaxyPosition(i - coreCount, haloCount, spiralParams);
-      const dist = pos.length();
+      const dist = Math.hypot(pos.x, pos.y);
       layerDepth = Math.min(dist / (radius * spread), 1.0);
-      baseSize = 0.003 + Math.random() * 0.012 * (1.0 - layerDepth * 0.4);
+      baseSize =
+        (0.012 + Math.random() * 0.022) * (1.0 - layerDepth * 0.3);
+      if (Math.random() < 0.018) baseSize += 0.015;
     }
 
     positions[i * 3]     = pos.x;
@@ -267,14 +273,10 @@ function create(scene, options = {}) {
     positions[i * 3 + 2] = pos.z;
 
     // Color
-    const ci = weightedColorIndex();
+    const ci = galaxyColorIndex(layerDepth, isCore);
     const baseColor = PALETTE[ci];
-    // Core particles skew whiter/brighter
-    if (isCore) {
-      tmpColor.copy(baseColor).lerp(new THREE.Color(0xffffff), 0.4);
-    } else {
-      tmpColor.copy(baseColor);
-    }
+    tmpColor.copy(baseColor);
+    if (isCore) tmpColor.lerp(CORE_HIGHLIGHT_COLOR, 0.28);
     colors[i * 3]     = tmpColor.r;
     colors[i * 3 + 1] = tmpColor.g;
     colors[i * 3 + 2] = tmpColor.b;
@@ -362,4 +364,3 @@ function create(scene, options = {}) {
 const XovaParticleSystem = { create };
 export { XovaParticleSystem };
 window.XovaParticleSystem = XovaParticleSystem;
-

@@ -192,9 +192,29 @@
   position: relative;
   width: 100%;
   height: 100%;
+  overflow: hidden;
+  background: transparent;
+  isolation: isolate;
 }
 
-#xova-hero-canvas {
+#xova-hero-canvas-wrap::before {
+  position: absolute;
+  z-index: 0;
+  inset: -12%;
+  background:
+    radial-gradient(ellipse at 52% 52%, rgba(114, 222, 239, 0.12), transparent 43%),
+    radial-gradient(ellipse at 62% 45%, rgba(112, 145, 255, 0.12), transparent 58%),
+    radial-gradient(ellipse at 42% 60%, rgba(154, 105, 255, 0.1), transparent 62%),
+    radial-gradient(ellipse at 70% 58%, rgba(196, 89, 231, 0.07), transparent 68%);
+  content: "";
+  pointer-events: none;
+}
+
+#xova-hero-canvas,
+#xova-canvas {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
@@ -227,6 +247,7 @@
   justify-content: center;
   min-height: 500px;
   overflow: hidden;
+  background: transparent;
 }
 
 /* Fade-in for hero content during transition from intro */
@@ -262,7 +283,7 @@
 }
 
 /* ================================================================
-   STATIC FALLBACK (for prefers-reduced-motion or no WebGL)
+   STATIC FALLBACK (when WebGL is unavailable)
    ================================================================ */
 
 .hero-visual-fallback {
@@ -273,11 +294,8 @@
   justify-content: center;
 }
 
-.no-webgl .hero-visual-fallback,
-@media (prefers-reduced-motion: reduce) {
-  .hero-visual-fallback {
-    display: flex;
-  }
+.no-webgl .hero-visual-fallback {
+  display: flex;
 }
 
 .fallback-glow {
@@ -347,12 +365,7 @@
     animation: none !important;
   }
 
-  .hero.hero-split .hero-visual canvas {
-    display: none;
-  }
-
-  .hero.hero-split .hero-visual-fallback {
-    display: flex;
+  .hero-canvas-entering {
+    animation: none !important;
   }
 }
-

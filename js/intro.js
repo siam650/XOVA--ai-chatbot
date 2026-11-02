@@ -154,9 +154,16 @@ function activateHomepage(instant = false) {
   if (heroEl) {
     heroEl.classList.add("hero-split");
   }
+  XovaParticleScene.handleResize();
 
-  // 6. Update camera position for hero (slightly further back for full view)
-  XovaParticleScene.setCameraBase(0, 0, 5.0, !instant);
+  // 6. Keep the galaxy comfortably within the available hero panel.
+  syncHeroCamera(!instant);
+}
+
+function syncHeroCamera(animate = false) {
+  if (!heroEl?.classList.contains("hero-split")) return;
+  const cameraDistance = window.innerWidth <= 900 ? 6.1 : 5.6;
+  XovaParticleScene.setCameraBase(0, 0, cameraDistance, animate);
 }
 
 // ── Stage 1: XOVA brand text fade-in ─────────────────────────────
@@ -301,6 +308,7 @@ function init() {
   heroEl         = document.querySelector(".hero");
   heroVisualEl   = document.querySelector(".hero-visual");
   heroContentEl  = document.querySelector(".hero-content");
+  window.addEventListener("resize", () => syncHeroCamera(), { passive: true });
 
   // Check skip conditions
   const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -309,10 +317,9 @@ function init() {
   if (prefersReducedMotion || alreadySeen || !introEl || !canvasEl) {
     // Skip intro entirely — initialize hero canvas directly
     if (introEl) introEl.classList.add("is-hidden");
-    const supported = XovaParticleScene.init(
-      canvasEl || createHeroCanvas(),
-      { quality: "auto" }
-    );
+    heroEl?.classList.add("hero-split");
+    canvasEl = createHeroCanvas(canvasEl);
+    const supported = XovaParticleScene.init(canvasEl, { quality: "auto" });
     if (supported) {
       activateHomepage(true);
       XovaParticleScene.startLoop();
@@ -355,13 +362,13 @@ function init() {
 
 // Creates a canvas for the hero if the intro canvas isn't present
 // (e.g., when loading directly to homepage with skip)
-function createHeroCanvas() {
+function createHeroCanvas(existingCanvas = null) {
   const heroVisual = document.querySelector("#xova-hero-canvas-wrap");
   if (!heroVisual) return null;
-  const c = document.createElement("canvas");
-  c.id = "xova-hero-canvas";
-  heroVisual.appendChild(c);
-  return c;
+  const canvas = existingCanvas || document.createElement("canvas");
+  canvas.id = "xova-canvas";
+  heroVisual.appendChild(canvas);
+  return canvas;
 }
 
 // ── Bootstrap on DOM ready ─────────────────────────────────────────
@@ -372,4 +379,3 @@ if (document.readyState === "loading") {
 }
 
 export { skipIntro };
-

@@ -102,8 +102,7 @@ button:disabled {
   display: block;
   width: 96px;
   height: 48px;
-  border-radius: 6px;
-  background: #fff;
+  background: transparent;
   object-fit: contain;
 }
 

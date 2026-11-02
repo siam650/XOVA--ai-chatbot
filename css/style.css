@@ -83,9 +83,13 @@ button {
   display: block;
   width: 104px;
   height: 52px;
-  border-radius: 7px;
-  background: #fff;
+  background: transparent;
   object-fit: contain;
+}
+
+.nav-shell > .brand .brand-logo {
+  width: 72px;
+  height: 34px;
 }
 
 .primary-navigation {

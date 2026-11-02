@@ -21,18 +21,18 @@ Voice recognition and playback depend on browser support and microphone permissi
    npm run dev
    ```
 
-   The server defaults to `http://localhost:3000`; set `PORT` in `server/.env` to change it. If port 3000 is already in use, stop the other server or choose another port and update the frontend API URL below. If PowerShell blocks the `npm` script, run `npm.cmd run dev` instead of changing the execution policy.
+   The server defaults to `http://localhost:3000`; set `PORT` in `server/.env` to change it. If port 3000 is already in use, stop the other server or update the local URL in `getApiBaseUrl()` in `js/chat-ai.js` to match the chosen port. If PowerShell blocks the `npm` script, run `npm.cmd run dev` instead of changing the execution policy.
 
 3. Serve the project root using VS Code Live Server on port 5500, or run `python -m http.server 5500` from the project root.
 4. Open `http://localhost:5500/chat.html?mode=casual-chat`. The backend allows this local origin and the project's GitHub Pages origin by default.
 
-The backend reads `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_TIMEOUT_MS`, `PORT`, and `FRONTEND_ORIGINS` from `server/.env`. The Gemini timeout defaults to 45 seconds; provider retries are disabled so each chat turn creates one upstream generation request. The frontend API base URL is configured once in the `xova-api-base-url` meta tag in `chat.html`, currently set to `https://xova-ai-chatbot.onrender.com` for GitHub Pages. When the page is opened from `localhost`, `127.0.0.1`, or `::1`, the frontend uses `http://localhost:3000` instead. API requests append `/api/chat` or `/api/assessment` to the selected base URL. The frontend never falls back to localhost outside local development. Also set `FRONTEND_ORIGINS` on the backend to the exact frontend origin (for GitHub Pages, `https://siam650.github.io`; do not include a path).
+The backend reads `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_TIMEOUT_MS`, `PORT`, and `FRONTEND_ORIGINS` from `server/.env`. The Gemini timeout defaults to 45 seconds; provider retries are disabled so each chat turn creates one upstream generation request. The frontend selects its API base URL by page hostname in `js/chat-ai.js`: `localhost`, `127.0.0.1`, and `::1` use `http://localhost:3000/api`; every other hostname uses `https://xova-ai-chatbot.onrender.com/api`. Requests append `/chat` or `/assessment` to the selected base URL. The frontend never falls back to localhost outside local development. Also set `FRONTEND_ORIGINS` on the backend to the exact frontend origin (for GitHub Pages, `https://siam650.github.io`; do not include a path).
 
 ## Deploy the backend to Render
 
 1. Deploy the repository's `server` directory as a Node web service. Set the service root directory to `server`, build command to `npm install`, start command to `npm start`, and health-check path to `/api/health`.
 2. Set `GEMINI_API_KEY` in the Render service's environment settings. Do not put this key in frontend files or logs. Set `FRONTEND_ORIGINS` to the exact deployed frontend origin; for the current GitHub Pages project this is `https://siam650.github.io`. Optionally set `GEMINI_MODEL` and `GEMINI_TIMEOUT_MS` (10000–50000 milliseconds; default 45000).
-3. If the Render service URL changes, update the `xova-api-base-url` meta tag in `chat.html` to the Render service origin (for example, `https://your-service.onrender.com`) and redeploy the static frontend.
+3. If the Render service URL changes, update the production URL returned by `getApiBaseUrl()` in `js/chat-ai.js` and redeploy the static frontend.
 4. Confirm `GET <Render service URL>/api/health` returns `{"status":"ok"}`. Send a test chat from the deployed site and inspect Render logs for safe status/timing diagnostics; logs do not include API keys or provider error messages.
 
 The source on the existing GitHub Pages deployment must include the current frontend changes, and the Render service must be deployed from a branch containing the `server` directory. A missing frontend API URL, a stale frontend build, or a Render service deployed from a branch without `server` cannot be corrected by changing Gemini settings alone.

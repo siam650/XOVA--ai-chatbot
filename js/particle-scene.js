@@ -20,11 +20,14 @@ const XovaParticleScene = (() => {
   let scene = null;
   let camera = null;
   let particleSystem = null;
+  let resizeObserver = null;
   let animationId = null;
   let canvas = null;
   let lastTime = 0;
   let isRunning = false;
   let isDisposed = false;
+  const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+  let isReducedMotion = reducedMotionQuery.matches;
 
   // Mouse tracking for parallax
   const mouse = { x: 0, y: 0, targetX: 0, targetY: 0 };
@@ -53,6 +56,7 @@ const XovaParticleScene = (() => {
 
   // ── Initialization ─────────────────────────────────────────────
   function init(targetCanvas, options = {}) {
+    if (renderer) dispose();
     if (!isWebGLSupported()) {
       console.warn("[Xova] WebGL not supported — particle system disabled.");
       return false;
@@ -60,6 +64,7 @@ const XovaParticleScene = (() => {
 
     canvas = targetCanvas;
     isDisposed = false;
+    isReducedMotion = reducedMotionQuery.matches;
 
     // Scene
     scene = new THREE.Scene();
@@ -74,12 +79,12 @@ const XovaParticleScene = (() => {
     renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: false,    // disabled for perf; particles look fine without it
-      alpha: false,
+      alpha: true,
       powerPreference: "high-performance",
     });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(width, height, false);
-    renderer.setClearColor(0x060b18, 1);
+    renderer.setClearColor(0x060b18, 0);
 
     // Particle system
     const particleCount = resolveParticleCount(options.quality);
@@ -92,8 +97,27 @@ const XovaParticleScene = (() => {
     // Events
     window.addEventListener("resize", handleResize, { passive: true });
     document.addEventListener("visibilitychange", handleVisibility);
+    if ("ResizeObserver" in window && canvas.parentElement) {
+      resizeObserver = new ResizeObserver(handleResize);
+      resizeObserver.observe(canvas.parentElement);
+    }
+    if (reducedMotionQuery.addEventListener) {
+      reducedMotionQuery.addEventListener("change", handleMotionPreference);
+    } else {
+      reducedMotionQuery.addListener(handleMotionPreference);
+    }
 
     return true;
+  }
+
+  function handleMotionPreference(event) {
+    isReducedMotion = event.matches;
+    if (isReducedMotion) {
+      stopLoop();
+      if (isRunning) tick(performance.now());
+    } else if (isRunning && !document.hidden) {
+      startLoop();
+    }
   }
 
   // Choose particle count based on device capability
@@ -117,6 +141,7 @@ const XovaParticleScene = (() => {
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     renderer.setSize(width, height, false);
+    if (isReducedMotion) renderer.render(scene, camera);
   }
 
   // ── Visibility ─────────────────────────────────────────────────
@@ -150,10 +175,11 @@ const XovaParticleScene = (() => {
   // ── Animation loop ─────────────────────────────────────────────
   function tick(now) {
     if (isDisposed || !renderer) return;
-    animationId = requestAnimationFrame(tick);
+    animationId = null;
+    if (!isReducedMotion) animationId = requestAnimationFrame(tick);
 
     // Delta time in seconds (capped to avoid spiral of death on tab wake)
-    const delta = Math.min((now - lastTime) / 1000, 0.05);
+    const delta = isReducedMotion ? 0 : Math.min((now - lastTime) / 1000, 0.05);
     lastTime = now;
 
     // Smooth mouse lerp
@@ -179,7 +205,10 @@ const XovaParticleScene = (() => {
     camera.lookAt(0, 0, 0);
 
     // Update particle system
-    particleSystem?.update(delta, now / 1000, { mouseX: mouse.x, mouseY: mouse.y });
+    particleSystem?.update(delta, isReducedMotion ? 0 : now / 1000, {
+      mouseX: mouse.x,
+      mouseY: mouse.y,
+    });
 
     renderer.render(scene, camera);
   }
@@ -238,6 +267,13 @@ const XovaParticleScene = (() => {
     disableMouseParallax();
     window.removeEventListener("resize", handleResize);
     document.removeEventListener("visibilitychange", handleVisibility);
+    resizeObserver?.disconnect();
+    resizeObserver = null;
+    if (reducedMotionQuery.removeEventListener) {
+      reducedMotionQuery.removeEventListener("change", handleMotionPreference);
+    } else {
+      reducedMotionQuery.removeListener(handleMotionPreference);
+    }
     particleSystem?.dispose(scene);
     renderer?.dispose();
     renderer = null;
@@ -270,4 +306,3 @@ const XovaParticleScene = (() => {
 
 export { XovaParticleScene };
 window.XovaParticleScene = XovaParticleScene;
-

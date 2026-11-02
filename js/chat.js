@@ -31,6 +31,7 @@ const welcomeTitle = document.querySelector("#welcome-title");
 const welcomeCopy = document.querySelector("#welcome-copy");
 const suggestions = [...document.querySelectorAll(".suggestion")];
 const isLocalDevelopment = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+const MAX_MESSAGE_LENGTH = 1200;
 
 let conversation;
 let isThinking = false;
@@ -464,6 +465,10 @@ function sendMessage(text, metadata = {}) {
     });
   }
   if (!cleanText || isThinking || conversation.endedAt) return;
+  if (cleanText.length > MAX_MESSAGE_LENGTH) {
+    showNotice(`Messages must contain no more than ${MAX_MESSAGE_LENGTH} characters.`);
+    return;
+  }
   const submittedAt = performance.now();
   if (isLocalDevelopment) {
     console.debug("[Xova timing] User submitted message", {

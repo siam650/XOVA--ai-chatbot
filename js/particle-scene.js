@@ -7,11 +7,11 @@
  *  - Control the animation loop (start / stop / pause)
  *  - Expose a clean API consumed by intro.js and the homepage
  *
- * Depends on: Three.js (loaded via importmap as 'three')
+ * Depends on: Three.js r167 from the pinned jsDelivr module URL
  * Exposes:    window.XovaParticleScene
  */
 
-import * as THREE from "three";
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.167.1/build/three.module.js";
 import { XovaParticleSystem } from "./particle-system.js";
 
 const XovaParticleScene = (() => {

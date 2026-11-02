@@ -283,33 +283,93 @@ test("API validates requests, applies headers and restricts CORS", async () => {
 test("chat and assessment rate limits return structured 429 responses", async () => {
   const { calls, services } = createServices();
   await withServer(
-    { CHAT_RATE_LIMIT_MAX: "2", ASSESSMENT_RATE_LIMIT_MAX: "1" },
+    {
+      FRONTEND_ORIGINS:
+        "https://siam650.github.io,http://127.0.0.1:5500,http://localhost:5500",
+      CHAT_RATE_LIMIT_MAX: "1",
+      ASSESSMENT_RATE_LIMIT_MAX: "1",
+    },
     services,
     async (baseUrl) => {
+      for (const origin of [
+        "https://siam650.github.io",
+        "http://127.0.0.1:5500",
+        "http://localhost:5500",
+      ]) {
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          const preflight = await fetch(`${baseUrl}/api/chat`, {
+            method: "OPTIONS",
+            headers: {
+              Origin: origin,
+              "Access-Control-Request-Method": "POST",
+              "Access-Control-Request-Headers": "content-type",
+            },
+          });
+          assert.equal(preflight.status, 204);
+          assert.equal(preflight.headers.get("access-control-allow-origin"), origin);
+          assert.match(
+            preflight.headers.get("access-control-allow-methods"),
+            /POST/,
+          );
+          assert.match(
+            preflight.headers.get("access-control-allow-headers"),
+            /content-type/i,
+          );
+        }
+      }
+
       const chatBody = { message: "Hello", mode: "Casual Chat" };
       assert.equal((await fetch(`${baseUrl}/api/chat`)).status, 404);
-      assert.equal((await jsonRequest(`${baseUrl}/api/chat`, chatBody)).status, 200);
-      assert.equal((await jsonRequest(`${baseUrl}/api/chat`, chatBody)).status, 200);
-      const limitedChat = await jsonRequest(`${baseUrl}/api/chat`, chatBody);
+      const firstChat = await jsonRequest(`${baseUrl}/api/chat`, chatBody, {
+        headers: { Origin: "http://127.0.0.1:5500" },
+      });
+      assert.equal(firstChat.status, 200);
+      assert.equal(
+        firstChat.headers.get("access-control-allow-origin"),
+        "http://127.0.0.1:5500",
+      );
+      const limitedChat = await jsonRequest(`${baseUrl}/api/chat`, chatBody, {
+        headers: { Origin: "http://127.0.0.1:5500" },
+      });
       assert.equal(limitedChat.status, 429);
       assert.equal((await limitedChat.json()).code, "RATE_LIMITED");
       assert.ok(limitedChat.headers.get("ratelimit-limit"));
+      assert.equal(
+        limitedChat.headers.get("access-control-allow-origin"),
+        "http://127.0.0.1:5500",
+      );
 
       const assessmentBody = {
         mode: "Casual Chat",
         messages: [{ role: "user", text: "Hello" }],
       };
-      assert.equal(
-        (await jsonRequest(`${baseUrl}/api/assessment`, assessmentBody)).status,
-        200,
+      const assessmentPreflight = await fetch(`${baseUrl}/api/assessment`, {
+        method: "OPTIONS",
+        headers: {
+          Origin: "http://localhost:5500",
+          "Access-Control-Request-Method": "POST",
+          "Access-Control-Request-Headers": "content-type",
+        },
+      });
+      assert.equal(assessmentPreflight.status, 204);
+      const firstAssessment = await jsonRequest(
+        `${baseUrl}/api/assessment`,
+        assessmentBody,
+        { headers: { Origin: "http://localhost:5500" } },
       );
+      assert.equal(firstAssessment.status, 200);
       const limitedAssessment = await jsonRequest(
         `${baseUrl}/api/assessment`,
         assessmentBody,
+        { headers: { Origin: "http://localhost:5500" } },
       );
       assert.equal(limitedAssessment.status, 429);
       assert.equal((await limitedAssessment.json()).code, "RATE_LIMITED");
-      assert.equal(calls.chat.length, 2);
+      assert.equal(
+        limitedAssessment.headers.get("access-control-allow-origin"),
+        "http://localhost:5500",
+      );
+      assert.equal(calls.chat.length, 1);
       assert.equal(calls.assessment.length, 1);
     },
   );
